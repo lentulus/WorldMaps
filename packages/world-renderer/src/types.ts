@@ -7,7 +7,11 @@ export type RenderMode =
   | 'cells'
   | 'plates'
   | 'elevation'
-  | 'satellite';
+  | 'satellite'
+  | 'climate'
+  | 'temperature'
+  | 'humidity'
+  | 'clouds';
 export type RenderProjection = 'equirectangular' | 'orthographic';
 
 export interface RenderSource {
@@ -27,6 +31,18 @@ export interface RenderSource {
 
   /** Per-region elevation in [-1, 1]. Filled from Phase 5. */
   readonly elevation?: Float32Array;
+
+  /** Per-region temperature, °C. Filled from Phase 6. */
+  readonly temperature?: Float32Array;
+
+  /** Per-region relative humidity in [0, 1]. Filled from Phase 6. */
+  readonly humidity?: Float32Array;
+
+  /** Per-region cloud cover in [0, 1]. Filled from Phase 6. */
+  readonly clouds?: Float32Array;
+
+  /** Per-region wind, tangent-frame [east, north] interleaved (m/s). Filled from Phase 6. */
+  readonly wind?: Float32Array;
 }
 
 export interface RenderOptions {

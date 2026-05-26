@@ -37,6 +37,10 @@ export interface Topology {
   readonly edges: Int32Array;
 
   readonly numEdges: number;
+
+  /** Precomputed spherical cell area (steradians) per region. Used as weights
+   *  by area-weighted diffusion in the weather simulation. */
+  readonly cellArea: Float32Array;
 }
 
 export interface BuildTopologyOptions {
@@ -151,11 +155,32 @@ export function buildTopology(
   }
   const edges = new Int32Array(edgePairs);
 
+  // 7. Per-cell spherical area (precomputed for area-weighted diffusion).
+  const cellArea = new Float32Array(numRegions);
+  for (let i = 0; i < numRegions; i++) {
+    const start = vOffsets[i]!;
+    const end = vOffsets[i + 1]!;
+    const nVerts = (end - start) / 2;
+    if (nVerts < 3) {
+      cellArea[i] = 0;
+      continue;
+    }
+    const units: Vec3[] = new Array(nVerts);
+    for (let k = 0; k < nVerts; k++) {
+      const x = vFlat[start + 2 * k]!;
+      const y = vFlat[start + 2 * k + 1]!;
+      const ll = stereographicInverse({ x, y });
+      units[k] = latLonToUnit(ll.lat, ll.lon);
+    }
+    cellArea[i] = sphericalPolygonArea(units);
+  }
+
   return {
     neighbors: { offsets: nOffsets, flat: nFlat },
     cellVertices: { offsets: vOffsets, flat: vFlat },
     edges,
     numEdges: edges.length / 2,
+    cellArea,
   };
 }
 

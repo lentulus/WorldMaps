@@ -10,4 +10,8 @@ export {
   plateColor,
   elevationColor,
   satelliteColor,
+  temperatureColor,
+  humidityColor,
+  cloudColor,
+  climateColor,
 } from './palette.js';

@@ -13,6 +13,10 @@ import {
   plateColor,
   elevationColor,
   satelliteColor,
+  temperatureColor,
+  humidityColor,
+  cloudColor,
+  climateColor,
 } from './palette.js';
 import type {
   RenderSource,
@@ -86,6 +90,27 @@ function makeCellColor(
       const elev = source.elevation;
       if (!elev) return null;
       return (r) => satelliteColor(elev[r]!);
+    }
+    case 'temperature': {
+      const temp = source.temperature;
+      if (!temp) return null;
+      return (r) => temperatureColor(temp[r]!);
+    }
+    case 'humidity': {
+      const hum = source.humidity;
+      if (!hum) return null;
+      return (r) => humidityColor(hum[r]!);
+    }
+    case 'clouds': {
+      const cl = source.clouds;
+      if (!cl) return null;
+      return (r) => cloudColor(cl[r]!);
+    }
+    case 'climate': {
+      const elev = source.elevation;
+      const cl = source.clouds;
+      if (!elev || !cl) return null;
+      return (r) => climateColor(elev[r]!, cl[r]!);
     }
     case 'dots':
       return null;

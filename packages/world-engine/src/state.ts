@@ -28,8 +28,21 @@ export interface WorldState {
   /** Elevation per region, range [-1, 1]. Length = numRegions. Filled in Phase 5. */
   readonly elevation: Float32Array;
 
+  /** Temperature per region, °C. Length = numRegions. Filled in Phase 6. */
+  readonly temperature: Float32Array;
+
+  /** Relative humidity per region, [0, 1]. Length = numRegions. Filled in Phase 6. */
+  readonly humidity: Float32Array;
+
+  /** Cloud cover per region, [0, 1]. Length = numRegions. Filled in Phase 6. */
+  readonly clouds: Float32Array;
+
+  /** Surface wind per region, tangent-frame [east m/s, north m/s] interleaved.
+   *  Length = 2 * numRegions. Tangent-frame storage means the stored
+   *  magnitude IS the physical wind speed at every latitude — decision 10. */
+  readonly wind: Float32Array;
+
   // Future phases:
-  //   - Phase 6: temperature, humidity, wind, clouds, ...
   //   - Phase 7: riverflow (edge), riverPresence (region)
 }
 
@@ -42,6 +55,10 @@ export function createWorldState(meta: WorldStateMeta, topology: Topology | null
     topology,
     plate: new Int32Array(n),
     elevation: new Float32Array(n),
+    temperature: new Float32Array(n),
+    humidity: new Float32Array(n),
+    clouds: new Float32Array(n),
+    wind: new Float32Array(2 * n),
   };
 }
 
@@ -54,6 +71,10 @@ export function collectTransferables(state: WorldState): ArrayBuffer[] {
     state.latlon.buffer as ArrayBuffer,
     state.plate.buffer as ArrayBuffer,
     state.elevation.buffer as ArrayBuffer,
+    state.temperature.buffer as ArrayBuffer,
+    state.humidity.buffer as ArrayBuffer,
+    state.clouds.buffer as ArrayBuffer,
+    state.wind.buffer as ArrayBuffer,
   ];
   if (state.topology) {
     buffers.push(
@@ -62,6 +83,7 @@ export function collectTransferables(state: WorldState): ArrayBuffer[] {
       state.topology.cellVertices.offsets.buffer as ArrayBuffer,
       state.topology.cellVertices.flat.buffer as ArrayBuffer,
       state.topology.edges.buffer as ArrayBuffer,
+      state.topology.cellArea.buffer as ArrayBuffer,
     );
   }
   return buffers;

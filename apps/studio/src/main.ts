@@ -53,6 +53,10 @@ function postGenerate(): void {
       cellVertexFlat: state.topology.cellVertices.flat,
       plate: state.plate,
       elevation: state.elevation,
+      temperature: state.temperature,
+      humidity: state.humidity,
+      clouds: state.clouds,
+      wind: state.wind,
     };
     redraw();
     setStatus(

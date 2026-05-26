@@ -30,18 +30,25 @@ describe('worker protocol — handleRequest', () => {
     expect(topology).not.toBeNull();
     if (!topology) throw new Error('unreachable');
 
-    // Phase 5: latlon + plate + elevation + 5 topology buffers = 8.
+    // Phase 6: latlon + plate + elevation + temperature + humidity + clouds +
+    // wind = 7 state buffers; topology = neighbors(offsets/flat) +
+    // cellVertices(offsets/flat) + edges + cellArea = 6 buffers. Total 13.
     // When future phases add more typed-array layers, this assertion will fail
     // and force collectTransferables to be updated — that's the point.
-    expect(transfer).toHaveLength(8);
+    expect(transfer).toHaveLength(13);
     expect(transfer).toContain(response.state.latlon.buffer);
     expect(transfer).toContain(response.state.plate.buffer);
     expect(transfer).toContain(response.state.elevation.buffer);
+    expect(transfer).toContain(response.state.temperature.buffer);
+    expect(transfer).toContain(response.state.humidity.buffer);
+    expect(transfer).toContain(response.state.clouds.buffer);
+    expect(transfer).toContain(response.state.wind.buffer);
     expect(transfer).toContain(topology.neighbors.offsets.buffer);
     expect(transfer).toContain(topology.neighbors.flat.buffer);
     expect(transfer).toContain(topology.cellVertices.offsets.buffer);
     expect(transfer).toContain(topology.cellVertices.flat.buffer);
     expect(transfer).toContain(topology.edges.buffer);
+    expect(transfer).toContain(topology.cellArea.buffer);
   });
 
   it('returns an `error` response on invalid params', () => {

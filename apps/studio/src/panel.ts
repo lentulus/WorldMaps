@@ -61,8 +61,12 @@ export function buildPanel(
     <div class="panel-section">Rendering</div>
     <div class="panel-row"><label>mode</label>
       <select id="ui-mode">
+        <option value="climate">climate</option>
         <option value="satellite">satellite</option>
         <option value="elevation">elevation</option>
+        <option value="temperature">temperature</option>
+        <option value="humidity">humidity</option>
+        <option value="clouds">clouds</option>
         <option value="plates">plates</option>
         <option value="cells">cells (region id)</option>
         <option value="dots">dots</option>

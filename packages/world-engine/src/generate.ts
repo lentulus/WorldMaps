@@ -9,6 +9,10 @@ import { buildTopology } from './geom/voronoi.js';
 import { createRng } from './rng.js';
 import { assignPlates } from './generate/plates.js';
 import { assignElevation } from './generate/elevation.js';
+import { assignTemperature } from './simulate/temperature.js';
+import { assignWind } from './simulate/wind.js';
+import { assignHumidity } from './simulate/humidity.js';
+import { assignClouds } from './simulate/clouds.js';
 
 export interface GenerateRequest {
   readonly seed: string;
@@ -63,6 +67,20 @@ export function runGenerate(req: GenerateRequest): WorldState {
     params.oceanFraction !== undefined ? { oceanFraction: params.oceanFraction } : {},
   );
   state.elevation.set(elev.elevation);
+
+  // Weather pass (Phase 6). Order matters: temperature depends on elevation;
+  // humidity uses temperature; clouds use humidity. Wind is independent.
+  const temperature = assignTemperature(actual, state.latlon, state.elevation, topology);
+  state.temperature.set(temperature);
+
+  const wind = assignWind(actual, state.latlon);
+  state.wind.set(wind);
+
+  const humidity = assignHumidity(actual, state.elevation, state.temperature, topology);
+  state.humidity.set(humidity);
+
+  const clouds = assignClouds(actual, state.elevation, state.humidity, topology);
+  state.clouds.set(clouds);
 
   return state;
 }
