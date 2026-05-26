@@ -4,9 +4,17 @@ Project to procedurally generate world maps and provide tools to annotate them. 
 
 ## Status
 
-Early scoping; all architectural decisions are recorded. Implementation hasn't started. See [HANDOVER.md](HANDOVER.md) for the current decision log and next actions.
+Mid-implementation. Phases 0–5 of [`plans/plan1.md`](plans/plan1.md) are landed: contract package, engine (sphere + Voronoi + plates + elevation), renderer (orthographic + equirectangular, five modes), studio (Web Worker, vanilla panel). 92 tests passing. Next: Phase 6 weather. See [HANDOVER.md](HANDOVER.md) for the live decision log.
 
-Target stack: **TypeScript** monorepo with three packages — `world-contract`, `world-engine`, `world-renderer` — on Vite, using d3-delaunay for Voronoi. Engine runs in a Web Worker by default.
+Stack: **TypeScript** monorepo with three packages — `world-contract`, `world-engine`, `world-renderer` — on Vite, using d3-delaunay for Voronoi. Engine runs in a Web Worker by default.
+
+## Running it
+
+```sh
+npm install
+npx vitest run                 # 92 tests
+cd apps/studio && npx vite     # open http://127.0.0.1:5173/
+```
 
 ## Documents
 

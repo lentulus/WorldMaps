@@ -1,0 +1,10 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/world-contract" },
+    { "path": "./packages/world-engine" },
+    { "path": "./packages/world-renderer" },
+    { "path": "./apps/studio" },
+    { "path": "./apps/service" }
+  ]
+}

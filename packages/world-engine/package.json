@@ -1,0 +1,29 @@
+{
+  "name": "@worldmaps/world-engine",
+  "version": "0.0.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./worker": {
+      "types": "./dist/worker.d.ts",
+      "import": "./dist/worker.js"
+    },
+    "./src/worker.ts": "./src/worker.ts"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@worldmaps/world-contract": "*",
+    "d3-delaunay": "^6.0.4"
+  },
+  "devDependencies": {
+    "@types/d3-delaunay": "^6.0.4"
+  }
+}
