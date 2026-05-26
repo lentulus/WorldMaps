@@ -17,6 +17,8 @@ import {
   humidityColor,
   cloudColor,
   climateColor,
+  currentColor,
+  riverColor,
 } from './palette.js';
 import type {
   RenderSource,
@@ -111,6 +113,23 @@ function makeCellColor(
       const cl = source.clouds;
       if (!elev || !cl) return null;
       return (r) => climateColor(elev[r]!, cl[r]!);
+    }
+    case 'currents': {
+      const elev = source.elevation;
+      const cur = source.currents;
+      if (!elev || !cur) return null;
+      return (r) => {
+        const u = cur[2 * r]!;
+        const v = cur[2 * r + 1]!;
+        const m = Math.hypot(u, v);
+        return currentColor(elev[r]!, m);
+      };
+    }
+    case 'rivers': {
+      const elev = source.elevation;
+      const pres = source.riverPresence;
+      if (!elev || !pres) return null;
+      return (r) => riverColor(elev[r]!, pres[r]!);
     }
     case 'dots':
       return null;

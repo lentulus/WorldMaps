@@ -15,6 +15,9 @@ export interface WorldStateMeta {
 export interface WorldState {
   readonly meta: WorldStateMeta;
   readonly numRegions: number;
+  /** Number of edges in the topology, mirrored from `topology.numEdges`.
+   *  Zero before Phase 3. Sized to allow edge-domain layers (e.g. riverflow). */
+  readonly numEdges: number;
 
   /** Interleaved [lat, lon] in degrees. Length = 2 * numRegions. */
   readonly latlon: Float32Array;
@@ -42,15 +45,28 @@ export interface WorldState {
    *  magnitude IS the physical wind speed at every latitude — decision 10. */
   readonly wind: Float32Array;
 
-  // Future phases:
-  //   - Phase 7: riverflow (edge), riverPresence (region)
+  /** Surface ocean current per region, tangent-frame [east m/s, north m/s]
+   *  interleaved. Length = 2 * numRegions. Land cells store (0, 0). Filled
+   *  in Phase 7 — analytically re-derived from wind + Coriolis per
+   *  decision 10. */
+  readonly currents: Float32Array;
+
+  /** Per-edge river flow, length = numEdges. Filled in Phase 7. First
+   *  edge-domain layer in the engine output. */
+  readonly riverflow: Float32Array;
+
+  /** Per-region river presence scalar in [0, 1], length = numRegions.
+   *  Derived from riverflow + topology per decision 15 (dual exposure). */
+  readonly riverPresence: Float32Array;
 }
 
 export function createWorldState(meta: WorldStateMeta, topology: Topology | null = null): WorldState {
   const n = meta.actualRegions;
+  const e = topology ? topology.numEdges : 0;
   return {
     meta,
     numRegions: n,
+    numEdges: e,
     latlon: new Float32Array(2 * n),
     topology,
     plate: new Int32Array(n),
@@ -59,6 +75,9 @@ export function createWorldState(meta: WorldStateMeta, topology: Topology | null
     humidity: new Float32Array(n),
     clouds: new Float32Array(n),
     wind: new Float32Array(2 * n),
+    currents: new Float32Array(2 * n),
+    riverflow: new Float32Array(e),
+    riverPresence: new Float32Array(n),
   };
 }
 
@@ -75,6 +94,9 @@ export function collectTransferables(state: WorldState): ArrayBuffer[] {
     state.humidity.buffer as ArrayBuffer,
     state.clouds.buffer as ArrayBuffer,
     state.wind.buffer as ArrayBuffer,
+    state.currents.buffer as ArrayBuffer,
+    state.riverflow.buffer as ArrayBuffer,
+    state.riverPresence.buffer as ArrayBuffer,
   ];
   if (state.topology) {
     buffers.push(

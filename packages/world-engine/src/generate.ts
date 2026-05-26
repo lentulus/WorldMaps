@@ -13,6 +13,8 @@ import { assignTemperature } from './simulate/temperature.js';
 import { assignWind } from './simulate/wind.js';
 import { assignHumidity } from './simulate/humidity.js';
 import { assignClouds } from './simulate/clouds.js';
+import { assignCurrents } from './simulate/currents.js';
+import { assignRivers } from './simulate/rivers.js';
 
 export interface GenerateRequest {
   readonly seed: string;
@@ -81,6 +83,16 @@ export function runGenerate(req: GenerateRequest): WorldState {
 
   const clouds = assignClouds(actual, state.elevation, state.humidity, topology);
   state.clouds.set(clouds);
+
+  // Phase 7: currents (analytical re-derivation from wind+Coriolis,
+  // decision 10) and rivers (per-edge riverflow + per-region riverPresence,
+  // decision 15).
+  const currents = assignCurrents(actual, state.latlon, state.elevation, state.wind, topology);
+  state.currents.set(currents);
+
+  const rivers = assignRivers(actual, state.elevation, state.humidity, topology);
+  state.riverflow.set(rivers.riverflow);
+  state.riverPresence.set(rivers.riverPresence);
 
   return state;
 }

@@ -104,6 +104,80 @@ export function cloudColor(c: number): string {
   return `rgb(${v}, ${v}, ${v})`;
 }
 
+/** Ocean current composite: satellite-base ocean tinted toward cyan where the
+ *  surface current magnitude is high. Land cells use the plain satellite color
+ *  so the eye anchors on coastlines. `magnitude` is m/s; saturates around 0.5. */
+export function currentColor(elevation: number, magnitude: number): string {
+  // Recompute satellite base inline (same as climateColor) — cheaper than
+  // round-tripping through CSS.
+  let r: number;
+  let g: number;
+  let b: number;
+  if (elevation <= 0) {
+    const t = clamp01(elevation + 1);
+    r = lerp(18, 50, t);
+    g = lerp(40, 90, t);
+    b = lerp(95, 130, t);
+  } else if (elevation < 0.5) {
+    const u = elevation / 0.5;
+    r = lerp(80, 110, u);
+    g = lerp(120, 110, u);
+    b = lerp(60, 70, u);
+  } else if (elevation < 0.9) {
+    const u = (elevation - 0.5) / 0.4;
+    r = lerp(110, 160, u);
+    g = lerp(110, 130, u);
+    b = lerp(70, 100, u);
+  } else {
+    const u = (elevation - 0.9) / 0.1;
+    r = lerp(160, 240, u);
+    g = lerp(130, 240, u);
+    b = lerp(100, 245, u);
+  }
+  if (elevation <= 0) {
+    // Cyan-leaning highlight tint scaled by magnitude (saturates at ~0.4 m/s).
+    const k = clamp01(magnitude / 0.4) * 0.85;
+    const inv = 1 - k;
+    return `rgb(${Math.round(r * inv + 80 * k)}, ${Math.round(g * inv + 230 * k)}, ${Math.round(b * inv + 230 * k)})`;
+  }
+  return `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
+}
+
+/** River composite: satellite-base land tinted toward river-blue where
+ *  `presence` is high. Ocean cells use the plain satellite color. */
+export function riverColor(elevation: number, presence: number): string {
+  let r: number;
+  let g: number;
+  let b: number;
+  if (elevation <= 0) {
+    const t = clamp01(elevation + 1);
+    r = lerp(18, 50, t);
+    g = lerp(40, 90, t);
+    b = lerp(95, 130, t);
+  } else if (elevation < 0.5) {
+    const u = elevation / 0.5;
+    r = lerp(80, 110, u);
+    g = lerp(120, 110, u);
+    b = lerp(60, 70, u);
+  } else if (elevation < 0.9) {
+    const u = (elevation - 0.5) / 0.4;
+    r = lerp(110, 160, u);
+    g = lerp(110, 130, u);
+    b = lerp(70, 100, u);
+  } else {
+    const u = (elevation - 0.9) / 0.1;
+    r = lerp(160, 240, u);
+    g = lerp(130, 240, u);
+    b = lerp(100, 245, u);
+  }
+  if (elevation > 0) {
+    const k = clamp01(presence) * 0.9;
+    const inv = 1 - k;
+    return `rgb(${Math.round(r * inv + 40 * k)}, ${Math.round(g * inv + 110 * k)}, ${Math.round(b * inv + 210 * k)})`;
+  }
+  return `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
+}
+
 /** Climate composite: satellite base blended with cloud whiteness. */
 export function climateColor(elevation: number, cloudCover: number): string {
   // Parse the satellite color back out for blending. Cheaper to recompute the

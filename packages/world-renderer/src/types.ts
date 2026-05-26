@@ -11,7 +11,9 @@ export type RenderMode =
   | 'climate'
   | 'temperature'
   | 'humidity'
-  | 'clouds';
+  | 'clouds'
+  | 'currents'
+  | 'rivers';
 export type RenderProjection = 'equirectangular' | 'orthographic';
 
 export interface RenderSource {
@@ -43,6 +45,13 @@ export interface RenderSource {
 
   /** Per-region wind, tangent-frame [east, north] interleaved (m/s). Filled from Phase 6. */
   readonly wind?: Float32Array;
+
+  /** Per-region surface ocean current, tangent-frame [east, north] interleaved (m/s).
+   *  Filled from Phase 7. Land cells are (0, 0). */
+  readonly currents?: Float32Array;
+
+  /** Per-region river presence in [0, 1]. Filled from Phase 7. */
+  readonly riverPresence?: Float32Array;
 }
 
 export interface RenderOptions {

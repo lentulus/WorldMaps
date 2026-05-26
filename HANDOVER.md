@@ -2,7 +2,7 @@
 
 **Purpose of this file:** a re-entry point when a session is cut short. Read top-to-bottom in two minutes and you should know where the project is, what has been decided, and what the next decision is.
 
-**Last updated:** 2026-05-26 (Phases 0–6 implemented; weather core landed)
+**Last updated:** 2026-05-26 (Phases 0–7 implemented; currents + rivers landed)
 
 ---
 
@@ -14,12 +14,12 @@ The relationship to consumers is the same pattern already in use between [`Merid
 
 ## 2. Current status
 
-- **Phase:** mid-implementation. Phases 0–6 of [`plans/plan1.md`](plans/plan1.md) are done; **BP 2** (first interface) and **BP 3** (terrain visible) reached and the user's redirects from each are absorbed. Phase 6 weather core landed in the same session — no breakpoint between Phase 5 and BP 4.
-- **What works end-to-end:** studio → Web Worker → engine → renderer. Engine produces Fibonacci sphere → Voronoi topology (now with cached per-cell area) → tectonic plates (BFS flood) → elevation (plate-motion convergence + hotspots + ocean-fraction quantile shift) → weather (temperature insolation+lapse, banded zonal wind in tangent-frame, humidity ocean-source + area-weighted diffusion, clouds humidity+orographic lift). Renderer supports orthographic (default) and equirectangular projections, modes: `dots`, `cells`, `plates`, `elevation`, `satellite`, `temperature`, `humidity`, `clouds`, `climate` (satellite + cloud composite). ~50 ms generation at N=2048 in the worker; UI never blocks.
-- **Tests:** 112 passing under `vitest run` (92 prior + 20 new in Phase 6). Computer-evaluated tests are favoured over visual inspection per user preference; human breakpoints exist for redirects.
+- **Phase:** mid-implementation. Phases 0–7 of [`plans/plan1.md`](plans/plan1.md) are done; **BP 2** (first interface) and **BP 3** (terrain visible) reached and the user's redirects from each are absorbed. Phases 6 and 7 landed sequentially with no intermediate breakpoint — **BP 4** is the next user-touch point.
+- **What works end-to-end:** studio → Web Worker → engine → renderer. Engine produces Fibonacci sphere → Voronoi topology (with cached per-cell area) → tectonic plates (BFS flood) → elevation (plate-motion convergence + hotspots + ocean-fraction quantile shift) → weather (temperature insolation+lapse, banded zonal wind in tangent-frame, humidity ocean-source + area-weighted diffusion, clouds humidity+orographic lift) → currents (Ekman-deflected wind in tangent-frame, ocean cells only) → rivers (D8 downhill routing on Voronoi mesh; per-edge `riverflow` + derived per-region `riverPresence`). Renderer supports orthographic (default) and equirectangular projections, modes: `dots`, `cells`, `plates`, `elevation`, `satellite`, `temperature`, `humidity`, `clouds`, `currents`, `rivers`, `climate`. ~80 ms generation at N=2048 in the worker; UI never blocks.
+- **Tests:** 123 passing under `vitest run` (112 prior + 11 new in Phase 7: currents bounds + Ekman-chirality + determinism; rivers non-negativity + conservation + presence re-derivability + determinism).
 - **Reference implementation studied:** [`freezedriedmangos/realistic-planet-generation-and-simulation`](https://freezedriedmangos.github.io/realistic-planet-generation-and-simulation/) (p5.js). Local copy: [`/home/lentulus/projects/mapsamples/realistic-planet-generation-and-simulation`](../mapsamples/realistic-planet-generation-and-simulation). Treated as **algorithm reference, not a fork base**.
 - **Implementation language:** **TypeScript** — committed.
-- **Next phase:** Phase 7 — currents + rivers; analytical re-derivation of current vectors per decision 10; dual rivers exposure per decision 15. **BP 4** lands after Phase 7 (full sim visible) — first redirect opportunity since BP 3.
+- **Next:** **BP 4** — full sim visible, first redirect opportunity since BP 3. Likely targets: rivers palette contrast (presence ramp is muted at default N — most flow concentrates in a few trunk cells), mode subset/labels, animation cadence for weather, whether wind-driven humidity advection still needs to land (decision 25). After BP 4 → Phase 8 (serialization to contract).
 
 ## 3. What the reports say (one-paragraph each)
 
@@ -58,22 +58,24 @@ The relationship to consumers is the same pattern already in use between [`Merid
 | 23 | **Boundary elevation BFS attenuation params (depth=6, decay=0.7) are constants for now, not generation params.** Kept simple; revisit if coastline shape quality becomes a redirect target. | BP 3 redirect 2026-05-26, user said "not closed off later" |
 | 24 | **Per-cell spherical area cached on `Topology` (`cellArea: Float32Array`).** Computed once in `buildTopology`, transferred to the worker boundary, and used as weights by `simulate/diffusion.ts`. Future passes (Phase 7+) read it directly instead of recomputing. | Phase 6 implementation 2026-05-26 |
 | 25 | **Wind-driven advection deferred from Phase 6.** Humidity uses pure area-weighted diffusion with re-pinned ocean sources (Dirichlet steady state). The Voronoi-mesh advection kernel is enough work to deserve its own pass; the pure-diffusion model already produces the wet-coast / dry-interior pattern. Revisit if BP 4 redirect calls for explicit prevailing-wind moisture transport. | Phase 6 implementation 2026-05-26 |
+| 26 | **Currents are scaled, Ekman-deflected wind on ocean cells only** — tangent-frame `[east, north]` per region, deflection angle `−sin(lat) · 30°` (right-of-wind in N, left in S, zero at equator), magnitude `0.04 · wind`. Land cells store `(0, 0)`. No closed gyres without continent boundaries; the user-facing "chirality" property the tests verify is the Ekman deflection sense, not basin rotation. Decision 10's "analytical re-derivation per ISEA face" reduces to "compute per-region from the scalar/vector fields, do not store in `[dlat, dlon]`" — that is what we do. | Phase 7 implementation 2026-05-26 |
+| 27 | **Rivers use D8-style downhill routing on the Voronoi mesh.** Each land cell's downstream is its strictly-lower-elevation neighbor with minimum elevation; cells with no lower neighbor are sinks and water disappears in v1 (no lake filling). Precipitation per cell is `humidity[r] · cellArea[r]`. Cells are processed in decreasing-elevation order so accumulation is single-pass. `riverPresence[r]` is `(maxIncidentFlow / globalMax) ^ 0.5` — sqrt ramp chosen so tributaries stay visible alongside trunk rivers. The γ ramp is a candidate BP 4 redirect target (default ramp is fairly muted at low-to-mid N). | Phase 7 implementation 2026-05-26 |
+| 28 | **`WorldState.numEdges` is mirrored from `topology.numEdges` at creation time.** First edge-domain layer (`riverflow`) needed a size, and exposing it on `WorldState` matches the contract's `LayerDomain = 'edge'` discriminator and keeps consumers from having to reach through `topology`. | Phase 7 implementation 2026-05-26 |
 
 ## 5. Open decisions (the next questions to answer)
 
-All architectural / scoping questions are resolved through Phase 6. Anything new should be filed as a fresh entry under §4 (with date) once decided.
+All architectural / scoping questions are resolved through Phase 7. Anything new should be filed as a fresh entry under §4 (with date) once decided.
 
-Likely places for the next decisions: BP 4 (after Phase 7 currents+rivers) — overlay styling, weather animation cadence, mode subset, whether humidity/cloud calibration needs visible-contrast tuning, whether wind-driven advection needs to land before Phase 7 (decision 25).
+Likely places for the next decisions: BP 4 (now) — rivers palette contrast / γ ramp (decision 27), currents visualization (cell tint vs explicit arrows), overlay styling, weather animation cadence, mode subset, whether wind-driven humidity advection (decision 25) needs to land before Phase 8.
 
 ## 8. Next concrete actions
 
-Phases 0–6 of [`plans/plan1.md`](plans/plan1.md) are landed. Up next:
+Phases 0–7 of [`plans/plan1.md`](plans/plan1.md) are landed. Up next:
 
-1. **Phase 7 — currents + rivers** (~3 days). Includes analytical re-derivation of current vectors (decision 10) and the dual rivers exposure: per-edge `riverflow` + per-region `riverPresence` (decision 15). New modules: `simulate/currents.ts`, `simulate/rivers.ts`. Adds an edge-domain layer for the first time — keep the contract's `LayerDomain = 'edge'` discriminator in mind.
-2. **BP 4** lands after Phase 7 — full sim visible. First redirect opportunity since BP 3.
-3. **Phase 8 — serialization to contract** (~1.5 days). Engine emits manifest + blobs; studio gets save/load. Load-determinism test (decision 12).
-4. **Phase 9 — apps/service HTTP wrapper** (~1 day).
-5. **BP 5** lands after Phase 9 — pre-merge gate.
+1. **BP 4 — full sim visible.** First redirect opportunity since BP 3. Modes available end-to-end: satellite, elevation, plates, temperature, humidity, clouds, currents, rivers, climate, cells, dots. Use Phase 7 screenshots in `.tmp/phase7-*.png` as the starting visual reference.
+2. **Phase 8 — serialization to contract** (~1.5 days). Engine emits manifest + blobs; studio gets save/load. Load-determinism test (decision 12). First user of the edge-domain layer descriptor (`riverflow`).
+3. **Phase 9 — apps/service HTTP wrapper** (~1 day).
+4. **BP 5** lands after Phase 9 — pre-merge gate.
 
 ## 6. Where things live
 
@@ -101,7 +103,7 @@ Phases 0–6 of [`plans/plan1.md`](plans/plan1.md) are landed. Up next:
 │   │   │   └── src/{state,rng,generate,worker,worker-protocol}.ts
 │   │   │       + geom/{projections,sphere,voronoi}.ts
 │   │   │       + generate/{plates,elevation}.ts
-│   │   │       + simulate/{diffusion,temperature,wind,humidity,clouds}.ts
+│   │   │       + simulate/{diffusion,temperature,wind,humidity,clouds,currents,rivers}.ts
 │   │   └── world-renderer/                 ← Canvas2D, projections, palettes, modes
 │   │       └── src/{canvas,palette,types}.ts
 │   └── apps/
@@ -122,7 +124,7 @@ Phases 0–6 of [`plans/plan1.md`](plans/plan1.md) are landed. Up next:
 1. Read this file.
 2. Read [`plans/plan1.md`](plans/plan1.md) — that's the spec progress is reported against.
 3. `git log --oneline -20` for what's landed since the last update of this file.
-4. `npm install && npx vitest run` to verify the test suite is still green (currently 112).
-5. Run the studio: `cd apps/studio && npx vite` — open `http://127.0.0.1:5173/`. Should see an orthographic globe; the mode dropdown now lists climate / temperature / humidity / clouds in addition to the Phase-5 modes.
+4. `npm install && npx vitest run` to verify the test suite is still green (currently 123).
+5. Run the studio: `cd apps/studio && npx vite` — open `http://127.0.0.1:5173/`. Should see an orthographic globe; the mode dropdown lists climate / satellite / elevation / temperature / humidity / clouds / currents / rivers / plates / cells / dots.
 6. If §5 lists decisions as open, confirm with the user before assuming.
 7. **Update this file at the end of any non-trivial session.** New decisions go in §4 with the date.

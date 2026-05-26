@@ -57,6 +57,8 @@ function postGenerate(): void {
       humidity: state.humidity,
       clouds: state.clouds,
       wind: state.wind,
+      currents: state.currents,
+      riverPresence: state.riverPresence,
     };
     redraw();
     setStatus(

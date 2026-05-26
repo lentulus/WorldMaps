@@ -30,12 +30,13 @@ describe('worker protocol — handleRequest', () => {
     expect(topology).not.toBeNull();
     if (!topology) throw new Error('unreachable');
 
-    // Phase 6: latlon + plate + elevation + temperature + humidity + clouds +
-    // wind = 7 state buffers; topology = neighbors(offsets/flat) +
-    // cellVertices(offsets/flat) + edges + cellArea = 6 buffers. Total 13.
-    // When future phases add more typed-array layers, this assertion will fail
-    // and force collectTransferables to be updated — that's the point.
-    expect(transfer).toHaveLength(13);
+    // Phase 7: latlon + plate + elevation + temperature + humidity + clouds +
+    // wind + currents + riverflow + riverPresence = 10 state buffers; topology =
+    // neighbors(offsets/flat) + cellVertices(offsets/flat) + edges + cellArea
+    // = 6 buffers. Total 16. When future phases add more typed-array layers,
+    // this assertion will fail and force collectTransferables to be updated —
+    // that's the point.
+    expect(transfer).toHaveLength(16);
     expect(transfer).toContain(response.state.latlon.buffer);
     expect(transfer).toContain(response.state.plate.buffer);
     expect(transfer).toContain(response.state.elevation.buffer);
@@ -43,6 +44,9 @@ describe('worker protocol — handleRequest', () => {
     expect(transfer).toContain(response.state.humidity.buffer);
     expect(transfer).toContain(response.state.clouds.buffer);
     expect(transfer).toContain(response.state.wind.buffer);
+    expect(transfer).toContain(response.state.currents.buffer);
+    expect(transfer).toContain(response.state.riverflow.buffer);
+    expect(transfer).toContain(response.state.riverPresence.buffer);
     expect(transfer).toContain(topology.neighbors.offsets.buffer);
     expect(transfer).toContain(topology.neighbors.flat.buffer);
     expect(transfer).toContain(topology.cellVertices.offsets.buffer);

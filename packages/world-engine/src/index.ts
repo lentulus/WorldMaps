@@ -29,6 +29,16 @@ export {
 export { assignHumidity, type AssignHumidityOptions } from './simulate/humidity.js';
 export { assignClouds, type AssignCloudsOptions } from './simulate/clouds.js';
 export {
+  assignCurrents,
+  currentMagnitude,
+  type AssignCurrentsOptions,
+} from './simulate/currents.js';
+export {
+  assignRivers,
+  type AssignRiversOptions,
+  type AssignRiversResult,
+} from './simulate/rivers.js';
+export {
   areaWeightedDiffuseStep,
   areaWeightedDiffuse,
 } from './simulate/diffusion.js';

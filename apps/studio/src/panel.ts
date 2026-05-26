@@ -67,6 +67,8 @@ export function buildPanel(
         <option value="temperature">temperature</option>
         <option value="humidity">humidity</option>
         <option value="clouds">clouds</option>
+        <option value="currents">currents</option>
+        <option value="rivers">rivers</option>
         <option value="plates">plates</option>
         <option value="cells">cells (region id)</option>
         <option value="dots">dots</option>
