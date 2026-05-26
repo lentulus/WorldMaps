@@ -2,7 +2,7 @@
 
 **Purpose of this file:** a re-entry point when a session is cut short. Read top-to-bottom in two minutes and you should know where the project is, what has been decided, and what the next decision is.
 
-**Last updated:** 2026-05-26 (Phases 0–7 implemented; currents + rivers landed)
+**Last updated:** 2026-05-26 (Phases 0–7 implemented; BP 4 redirects absorbed)
 
 ---
 
@@ -14,12 +14,12 @@ The relationship to consumers is the same pattern already in use between [`Merid
 
 ## 2. Current status
 
-- **Phase:** mid-implementation. Phases 0–7 of [`plans/plan1.md`](plans/plan1.md) are done; **BP 2** (first interface) and **BP 3** (terrain visible) reached and the user's redirects from each are absorbed. Phases 6 and 7 landed sequentially with no intermediate breakpoint — **BP 4** is the next user-touch point.
-- **What works end-to-end:** studio → Web Worker → engine → renderer. Engine produces Fibonacci sphere → Voronoi topology (with cached per-cell area) → tectonic plates (BFS flood) → elevation (plate-motion convergence + hotspots + ocean-fraction quantile shift) → weather (temperature insolation+lapse, banded zonal wind in tangent-frame, humidity ocean-source + area-weighted diffusion, clouds humidity+orographic lift) → currents (Ekman-deflected wind in tangent-frame, ocean cells only) → rivers (D8 downhill routing on Voronoi mesh; per-edge `riverflow` + derived per-region `riverPresence`). Renderer supports orthographic (default) and equirectangular projections, modes: `dots`, `cells`, `plates`, `elevation`, `satellite`, `temperature`, `humidity`, `clouds`, `currents`, `rivers`, `climate`. ~80 ms generation at N=2048 in the worker; UI never blocks.
-- **Tests:** 123 passing under `vitest run` (112 prior + 11 new in Phase 7: currents bounds + Ekman-chirality + determinism; rivers non-negativity + conservation + presence re-derivability + determinism).
+- **Phase:** mid-implementation. Phases 0–7 of [`plans/plan1.md`](plans/plan1.md) are done; **BP 2** (first interface), **BP 3** (terrain visible), and **BP 4** (full sim visible) all reached, redirects absorbed. **Phase 8** (serialization to contract) is the next concrete chunk.
+- **What works end-to-end:** studio → Web Worker → engine → renderer. Engine produces Fibonacci sphere → Voronoi topology (with cached per-cell area) → tectonic plates (BFS flood) → elevation (plate-motion convergence + hotspots + ocean-fraction quantile shift) → weather (temperature insolation+lapse, banded zonal wind in tangent-frame, **humidity = semi-Lagrangian wind advection + area-weighted diffusion + Dirichlet ocean sources**, clouds humidity+orographic lift) → currents (Ekman-deflected wind in tangent-frame, ocean cells only) → rivers (D8 downhill routing on Voronoi mesh; per-edge `riverflow` + derived per-region `riverPresence`). Renderer supports orthographic (default) and equirectangular projections, modes: `dots`, `cells`, `plates`, `elevation`, `satellite`, `temperature`, `humidity`, `clouds`, `currents`, `rivers` (lines), `climate`. Overlay: `showCurrentArrows` toggle works over any mode. ~100 ms generation at N=2048 in the worker; UI never blocks.
+- **Tests:** 123 passing under `vitest run`. Computer-evaluated tests are favoured over visual inspection; BP 4 added no new tests since the redirects were palette/overlay/UX (verified by screenshot).
 - **Reference implementation studied:** [`freezedriedmangos/realistic-planet-generation-and-simulation`](https://freezedriedmangos.github.io/realistic-planet-generation-and-simulation/) (p5.js). Local copy: [`/home/lentulus/projects/mapsamples/realistic-planet-generation-and-simulation`](../mapsamples/realistic-planet-generation-and-simulation). Treated as **algorithm reference, not a fork base**.
 - **Implementation language:** **TypeScript** — committed.
-- **Next:** **BP 4** — full sim visible, first redirect opportunity since BP 3. Likely targets: rivers palette contrast (presence ramp is muted at default N — most flow concentrates in a few trunk cells), mode subset/labels, animation cadence for weather, whether wind-driven humidity advection still needs to land (decision 25). After BP 4 → Phase 8 (serialization to contract).
+- **Next:** **Phase 8 — serialization to contract** (~1.5 days). Engine emits `WorldManifest` + binary blobs against the Phase 1 contract; studio gets save/load; load-determinism test per decision 12. First user of the `LayerDomain = 'edge'` discriminator (`riverflow`). All BP 4 carryovers settled — humidity now ships post-advection; mode set is final; layer set is final (see §4 decisions 29–32).
 
 ## 3. What the reports say (one-paragraph each)
 
@@ -57,25 +57,28 @@ The relationship to consumers is the same pattern already in use between [`Merid
 | 22 | **Render modes are first-class engine concepts, not just palettes.** Each mode (`dots`, `cells`, `plates`, `elevation`, `satellite`) takes its data from a specific WorldState layer; modes that need a layer the engine hasn't produced fail gracefully (render nothing). This decouples render-mode growth from engine-pass growth — future weather modes (`temperature`, `wind`, etc.) plug into the same dispatch without touching the canvas core. | Implementation note, 2026-05-26 |
 | 23 | **Boundary elevation BFS attenuation params (depth=6, decay=0.7) are constants for now, not generation params.** Kept simple; revisit if coastline shape quality becomes a redirect target. | BP 3 redirect 2026-05-26, user said "not closed off later" |
 | 24 | **Per-cell spherical area cached on `Topology` (`cellArea: Float32Array`).** Computed once in `buildTopology`, transferred to the worker boundary, and used as weights by `simulate/diffusion.ts`. Future passes (Phase 7+) read it directly instead of recomputing. | Phase 6 implementation 2026-05-26 |
-| 25 | **Wind-driven advection deferred from Phase 6.** Humidity uses pure area-weighted diffusion with re-pinned ocean sources (Dirichlet steady state). The Voronoi-mesh advection kernel is enough work to deserve its own pass; the pure-diffusion model already produces the wet-coast / dry-interior pattern. Revisit if BP 4 redirect calls for explicit prevailing-wind moisture transport. | Phase 6 implementation 2026-05-26 |
+| 25 | ~~**Wind-driven advection deferred from Phase 6.**~~ **REVERSED at BP 4** — see decision 29. Original wording kept for the audit trail: "Humidity uses pure area-weighted diffusion with re-pinned ocean sources. The Voronoi-mesh advection kernel is enough work to deserve its own pass." Reversed because Phase 8 freezes contract bytes (decision 12) and we'd rather ship post-advection humidity in v1 than pin pre-advection forever. | Phase 6 implementation, reversed BP 4 2026-05-26 |
 | 26 | **Currents are scaled, Ekman-deflected wind on ocean cells only** — tangent-frame `[east, north]` per region, deflection angle `−sin(lat) · 30°` (right-of-wind in N, left in S, zero at equator), magnitude `0.04 · wind`. Land cells store `(0, 0)`. No closed gyres without continent boundaries; the user-facing "chirality" property the tests verify is the Ekman deflection sense, not basin rotation. Decision 10's "analytical re-derivation per ISEA face" reduces to "compute per-region from the scalar/vector fields, do not store in `[dlat, dlon]`" — that is what we do. | Phase 7 implementation 2026-05-26 |
 | 27 | **Rivers use D8-style downhill routing on the Voronoi mesh.** Each land cell's downstream is its strictly-lower-elevation neighbor with minimum elevation; cells with no lower neighbor are sinks and water disappears in v1 (no lake filling). Precipitation per cell is `humidity[r] · cellArea[r]`. Cells are processed in decreasing-elevation order so accumulation is single-pass. `riverPresence[r]` is `(maxIncidentFlow / globalMax) ^ 0.5` — sqrt ramp chosen so tributaries stay visible alongside trunk rivers. The γ ramp is a candidate BP 4 redirect target (default ramp is fairly muted at low-to-mid N). | Phase 7 implementation 2026-05-26 |
 | 28 | **`WorldState.numEdges` is mirrored from `topology.numEdges` at creation time.** First edge-domain layer (`riverflow`) needed a size, and exposing it on `WorldState` matches the contract's `LayerDomain = 'edge'` discriminator and keeps consumers from having to reach through `topology`. | Phase 7 implementation 2026-05-26 |
+| 29 | **Humidity now ships with wind-driven advection (reverses decision 25).** Implemented as a semi-Lagrangian step per iteration, interleaved with area-weighted diffusion: each cell samples its upstream cell along the local wind direction (greedy neighbor descent on dot-product against the displaced target unit vector). Unconditionally stable, costs ~O(N · avgDeg) per step like diffusion. Driver was BP 4: pure-diffusion humidity hid windward/leeward asymmetry, and Phase 8 freezes contract bytes (decision 12) — pre-advection humidity in v1 would be permanent. | BP 4 redirect 2026-05-26 |
+| 30 | **Rivers render as edge lines, not per-region tint.** The previous per-region `riverPresence` tint (decision in canvas.ts before BP 4) was too muted at default N. Rendering switched to: satellite base + per-edge line stroke with width/alpha scaled by `sqrt(normalized riverflow)`, threshold `nf > 0.01`. Per-region `riverPresence` is still emitted in `WorldState` because the contract advertises it (decision 15) and consumers may prefer the scalar form. | BP 4 redirect 2026-05-26 |
+| 31 | **Current arrows are an independent overlay toggle, not tied to mode.** Studio panel exposes a `current arrows` checkbox; when on, the renderer draws short arrows (subsampled, every 16th ocean cell by default) on top of WHATEVER cell pass is active. Implementation: cell centre + great-circle tip displaced along the current direction in 3D, both projected; works in equirectangular and orthographic. Cell-tint mode `currents` is kept as a magnitude legend; arrows complement it. | BP 4 redirect 2026-05-26 |
+| 32 | **Studio N cap raised from 5,000 → 1,000,000** with a yellow warning past 100,000 that displays an estimated generation time (extrapolated linearly from N=2048 → ~80 ms, so ~40 µs/cell). The cap was an arbitrary UI guard; no engine constraint. Past 100k the single-threaded worker blocks visibly, so the warning makes that trade-off explicit. | BP 4 redirect 2026-05-26 |
 
 ## 5. Open decisions (the next questions to answer)
 
-All architectural / scoping questions are resolved through Phase 7. Anything new should be filed as a fresh entry under §4 (with date) once decided.
+All architectural / scoping questions are resolved through BP 4. Anything new should be filed as a fresh entry under §4 (with date) once decided.
 
-Likely places for the next decisions: BP 4 (now) — rivers palette contrast / γ ramp (decision 27), currents visualization (cell tint vs explicit arrows), overlay styling, weather animation cadence, mode subset, whether wind-driven humidity advection (decision 25) needs to land before Phase 8.
+Likely places for the next decisions: **BP 5** (after Phase 9, pre-merge gate) — manifest schema final review, blob compression, tagged-release versioning.
 
 ## 8. Next concrete actions
 
-Phases 0–7 of [`plans/plan1.md`](plans/plan1.md) are landed. Up next:
+Phases 0–7 of [`plans/plan1.md`](plans/plan1.md) are landed, BP 4 redirects absorbed. Up next:
 
-1. **BP 4 — full sim visible.** First redirect opportunity since BP 3. Modes available end-to-end: satellite, elevation, plates, temperature, humidity, clouds, currents, rivers, climate, cells, dots. Use Phase 7 screenshots in `.tmp/phase7-*.png` as the starting visual reference.
-2. **Phase 8 — serialization to contract** (~1.5 days). Engine emits manifest + blobs; studio gets save/load. Load-determinism test (decision 12). First user of the edge-domain layer descriptor (`riverflow`).
-3. **Phase 9 — apps/service HTTP wrapper** (~1 day).
-4. **BP 5** lands after Phase 9 — pre-merge gate.
+1. **Phase 8 — serialization to contract** (~1.5 days). Engine emits manifest + blobs; studio gets save/load. Load-determinism test (decision 12). First user of the edge-domain layer descriptor (`riverflow`). Layer set is final per decisions 29–31: `latlon`, `plate`, `elevation`, `temperature`, `wind`, `humidity` (post-advection), `clouds`, `currents`, `riverflow` (edge), `riverPresence`.
+2. **Phase 9 — apps/service HTTP wrapper** (~1 day).
+3. **BP 5** lands after Phase 9 — pre-merge gate.
 
 ## 6. Where things live
 

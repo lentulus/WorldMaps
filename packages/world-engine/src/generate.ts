@@ -78,7 +78,14 @@ export function runGenerate(req: GenerateRequest): WorldState {
   const wind = assignWind(actual, state.latlon);
   state.wind.set(wind);
 
-  const humidity = assignHumidity(actual, state.elevation, state.temperature, topology);
+  const humidity = assignHumidity(
+    actual,
+    state.elevation,
+    state.temperature,
+    state.wind,
+    state.latlon,
+    topology,
+  );
   state.humidity.set(humidity);
 
   const clouds = assignClouds(actual, state.elevation, state.humidity, topology);

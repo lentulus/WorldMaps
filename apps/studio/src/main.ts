@@ -17,6 +17,7 @@ const ui: UiState = {
   cameraLon: 0,
   background: '#0a0a0a',
   dotRadius: 2,
+  showCurrentArrows: false,
 };
 
 const canvas = document.getElementById('canvas') as HTMLCanvasElement;
@@ -59,6 +60,8 @@ function postGenerate(): void {
       wind: state.wind,
       currents: state.currents,
       riverPresence: state.riverPresence,
+      riverflow: state.riverflow,
+      edges: state.topology.edges,
     };
     redraw();
     setStatus(
@@ -93,6 +96,7 @@ function redraw(): void {
     dotRadius: ui.dotRadius,
     cameraLat: ui.cameraLat,
     cameraLon: ui.cameraLon,
+    showCurrentArrows: ui.showCurrentArrows,
   });
 }
 

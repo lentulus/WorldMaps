@@ -52,6 +52,12 @@ export interface RenderSource {
 
   /** Per-region river presence in [0, 1]. Filled from Phase 7. */
   readonly riverPresence?: Float32Array;
+
+  /** Per-edge river flow, length = numEdges. Filled from Phase 7. */
+  readonly riverflow?: Float32Array;
+
+  /** Interleaved (regionA, regionB) per edge. Length = 2 * numEdges. */
+  readonly edges?: Int32Array;
 }
 
 export interface RenderOptions {
@@ -67,4 +73,9 @@ export interface RenderOptions {
   readonly cameraLat: number;
   /** Orthographic camera longitude (degrees). Ignored for equirectangular. */
   readonly cameraLon: number;
+  /** Draw current-vector arrows on top of the cell pass. Independent of mode
+   *  — works as an overlay over satellite, climate, currents, etc. */
+  readonly showCurrentArrows?: boolean;
+  /** Sample one arrow every N ocean cells. Default 16. */
+  readonly currentArrowEveryN?: number;
 }

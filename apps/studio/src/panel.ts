@@ -15,6 +15,8 @@ export interface UiState {
   cameraLon: number;
   background: string;
   dotRadius: number;
+  /** Overlay: draw current-vector arrows on top of whatever mode is active. */
+  showCurrentArrows: boolean;
 }
 
 export interface PanelCallbacks {
@@ -42,7 +44,11 @@ export function buildPanel(
                         font-size: 11px; opacity: 0.55; text-transform: uppercase; letter-spacing: 0.05em; }
     </style>
     <div class="panel-section" style="border-top: none; margin-top: 0; padding-top: 0;">Generation</div>
-    <div class="panel-row"><label>numRegions</label><input id="ui-num" type="number" min="16" max="5000" step="1"></div>
+    <div class="panel-row"><label>numRegions</label><input id="ui-num" type="number" min="16" max="1000000" step="1"></div>
+    <div class="panel-row" id="ui-num-warn-row" style="display: none; margin-top: -4px;">
+      <label></label>
+      <span id="ui-num-warn" style="font-size: 11px; color: #d4a44a; flex: 1;"></span>
+    </div>
     <div class="panel-row"><label>seed</label><input id="ui-seed" type="text"></div>
     <div class="panel-row"><label>plates</label><input id="ui-plates" type="number" min="2" max="30" step="1"></div>
     <div class="panel-row"><label>ocean %</label><input id="ui-ocean" type="number" min="0" max="100" step="1"></div>
@@ -76,6 +82,12 @@ export function buildPanel(
     </div>
     <div class="panel-row"><label>background</label><input id="ui-bg" type="color"></div>
     <div class="panel-row"><label>dot radius</label><input id="ui-dot" type="number" min="0.5" max="8" step="0.5"></div>
+
+    <div class="panel-section">Overlays</div>
+    <div class="panel-row"><label>current arrows</label>
+      <input id="ui-arrows" type="checkbox" style="flex: none; width: 18px; height: 18px; margin: 0;">
+      <span style="flex: 1;"></span>
+    </div>
   `;
 
   const num = root.querySelector<HTMLInputElement>('#ui-num')!;
@@ -88,6 +100,7 @@ export function buildPanel(
   const mode = root.querySelector<HTMLSelectElement>('#ui-mode')!;
   const bg = root.querySelector<HTMLInputElement>('#ui-bg')!;
   const dot = root.querySelector<HTMLInputElement>('#ui-dot')!;
+  const arrows = root.querySelector<HTMLInputElement>('#ui-arrows')!;
   const regen = root.querySelector<HTMLButtonElement>('#ui-regen')!;
 
   num.value = String(state.numRegions);
@@ -100,11 +113,29 @@ export function buildPanel(
   mode.value = state.mode;
   bg.value = state.background;
   dot.value = String(state.dotRadius);
+  arrows.checked = state.showCurrentArrows;
+
+  const warnRow = root.querySelector<HTMLDivElement>('#ui-num-warn-row')!;
+  const warn = root.querySelector<HTMLSpanElement>('#ui-num-warn')!;
+  function updateNumWarn(n: number): void {
+    if (n > 100000) {
+      // Linear-ish extrapolation calibrated from N=2048 → ~80 ms at Phase 7.
+      // ~40 µs / cell with Voronoi build dominating at high N. Order-of-
+      // magnitude only — the worker is single-threaded so big N will block.
+      const estSec = Math.round((n * 0.00004) * 10) / 10;
+      warn.textContent = `large N — generation may take ~${estSec}s and freeze the worker`;
+      warnRow.style.display = 'flex';
+    } else {
+      warnRow.style.display = 'none';
+    }
+  }
+  updateNumWarn(state.numRegions);
 
   num.addEventListener('change', () => {
-    const v = Math.max(16, Math.min(5000, Math.floor(Number(num.value) || state.numRegions)));
+    const v = Math.max(16, Math.min(1000000, Math.floor(Number(num.value) || state.numRegions)));
     state.numRegions = v;
     num.value = String(v);
+    updateNumWarn(v);
     cb.onRegenerate();
   });
   seed.addEventListener('change', () => {
@@ -148,6 +179,10 @@ export function buildPanel(
   });
   dot.addEventListener('change', () => {
     state.dotRadius = Number(dot.value) || state.dotRadius;
+    cb.onRedraw();
+  });
+  arrows.addEventListener('change', () => {
+    state.showCurrentArrows = arrows.checked;
     cb.onRedraw();
   });
 }
