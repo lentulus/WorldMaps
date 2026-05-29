@@ -15,8 +15,8 @@ export interface UiState {
   cameraLon: number;
   background: string;
   dotRadius: number;
-  /** Overlay: draw current-vector arrows on top of whatever mode is active. */
-  showCurrentArrows: boolean;
+  /** Overlay: equator / tropics / polar circles / meridians / N-S labels. */
+  showGraticule: boolean;
 }
 
 export interface PanelCallbacks {
@@ -75,7 +75,6 @@ export function buildPanel(
         <option value="temperature">temperature</option>
         <option value="humidity">humidity</option>
         <option value="clouds">clouds</option>
-        <option value="currents">currents</option>
         <option value="rivers">rivers</option>
         <option value="plates">plates</option>
         <option value="cells">cells (region id)</option>
@@ -86,8 +85,8 @@ export function buildPanel(
     <div class="panel-row"><label>dot radius</label><input id="ui-dot" type="number" min="0.5" max="8" step="0.5"></div>
 
     <div class="panel-section">Overlays</div>
-    <div class="panel-row"><label>current arrows</label>
-      <input id="ui-arrows" type="checkbox" style="flex: none; width: 18px; height: 18px; margin: 0;">
+    <div class="panel-row"><label>graticule</label>
+      <input id="ui-grat" type="checkbox" style="flex: none; width: 18px; height: 18px; margin: 0;">
       <span style="flex: 1;"></span>
     </div>
 
@@ -107,7 +106,7 @@ export function buildPanel(
   const mode = root.querySelector<HTMLSelectElement>('#ui-mode')!;
   const bg = root.querySelector<HTMLInputElement>('#ui-bg')!;
   const dot = root.querySelector<HTMLInputElement>('#ui-dot')!;
-  const arrows = root.querySelector<HTMLInputElement>('#ui-arrows')!;
+  const grat = root.querySelector<HTMLInputElement>('#ui-grat')!;
   const regen = root.querySelector<HTMLButtonElement>('#ui-regen')!;
   const save = root.querySelector<HTMLButtonElement>('#ui-save')!;
   const load = root.querySelector<HTMLButtonElement>('#ui-load')!;
@@ -123,7 +122,7 @@ export function buildPanel(
   mode.value = state.mode;
   bg.value = state.background;
   dot.value = String(state.dotRadius);
-  arrows.checked = state.showCurrentArrows;
+  grat.checked = state.showGraticule;
 
   const warnRow = root.querySelector<HTMLDivElement>('#ui-num-warn-row')!;
   const warn = root.querySelector<HTMLSpanElement>('#ui-num-warn')!;
@@ -133,7 +132,9 @@ export function buildPanel(
       // ~40 µs / cell with Voronoi build dominating at high N. Order-of-
       // magnitude only — the worker is single-threaded so big N will block.
       const estSec = Math.round((n * 0.00004) * 10) / 10;
-      warn.textContent = `large N — generation may take ~${estSec}s and freeze the worker`;
+      warn.textContent =
+        `large N — generation may take ~${estSec}s and freeze the worker; ` +
+        `cells approach sub-pixel size, expect a faint Fibonacci-spiral rendering artifact`;
       warnRow.style.display = 'flex';
     } else {
       warnRow.style.display = 'none';
@@ -191,8 +192,8 @@ export function buildPanel(
     state.dotRadius = Number(dot.value) || state.dotRadius;
     cb.onRedraw();
   });
-  arrows.addEventListener('change', () => {
-    state.showCurrentArrows = arrows.checked;
+  grat.addEventListener('change', () => {
+    state.showGraticule = grat.checked;
     cb.onRedraw();
   });
 

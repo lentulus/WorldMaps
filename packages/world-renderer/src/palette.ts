@@ -16,31 +16,47 @@ export function plateColor(plateId: number): string {
   return `hsl(${hue.toFixed(1)} 65% 55%)`;
 }
 
-/** Continuous color ramp for elevation in [-1, 1]. */
+/** Hypsometric color ramp for elevation in [-1, 1]. The cool-gray "exposed
+ *  rock" band 0.65→0.85 is a deliberate sharp jump from the warm foothill
+ *  brown so mountain ranges read unambiguously against the surrounding land. */
 export function elevationColor(e: number): string {
   if (e <= 0) {
     // Ocean depths: deep navy → light teal as e → 0
-    const t = Math.max(0, Math.min(1, (e + 1)));
+    const t = Math.max(0, Math.min(1, e + 1));
     const r = lerp(10, 90, t);
     const g = lerp(20, 160, t);
     const b = lerp(80, 200, t);
     return `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
   }
-  // Land: green → tan → white
   const t = Math.max(0, Math.min(1, e));
-  if (t < 0.45) {
-    // shallow → green
-    const u = t / 0.45;
-    return `rgb(${Math.round(lerp(160, 100, u))}, ${Math.round(lerp(200, 145, u))}, ${Math.round(lerp(120, 80, u))})`;
+  if (t < 0.04) {
+    // pale sand strip at sea level — clean coastline read
+    const u = t / 0.04;
+    return `rgb(${Math.round(lerp(220, 195, u))}, ${Math.round(lerp(210, 195, u))}, ${Math.round(lerp(160, 145, u))})`;
+  }
+  if (t < 0.30) {
+    // lowland: light → forest green
+    const u = (t - 0.04) / 0.26;
+    return `rgb(${Math.round(lerp(125, 70, u))}, ${Math.round(lerp(175, 120, u))}, ${Math.round(lerp(85, 55, u))})`;
+  }
+  if (t < 0.55) {
+    // upland: green → tan/savanna
+    const u = (t - 0.30) / 0.25;
+    return `rgb(${Math.round(lerp(110, 180, u))}, ${Math.round(lerp(140, 150, u))}, ${Math.round(lerp(70, 95, u))})`;
+  }
+  if (t < 0.65) {
+    // foothills: warm brown
+    const u = (t - 0.55) / 0.10;
+    return `rgb(${Math.round(lerp(180, 140, u))}, ${Math.round(lerp(150, 95, u))}, ${Math.round(lerp(95, 65, u))})`;
   }
   if (t < 0.85) {
-    // green → tan/brown
-    const u = (t - 0.45) / 0.4;
-    return `rgb(${Math.round(lerp(100, 175, u))}, ${Math.round(lerp(145, 130, u))}, ${Math.round(lerp(80, 90, u))})`;
+    // exposed rock — sharp jump to cool gray for mountain-range visibility
+    const u = (t - 0.65) / 0.20;
+    return `rgb(${Math.round(lerp(125, 195, u))}, ${Math.round(lerp(128, 195, u))}, ${Math.round(lerp(130, 200, u))})`;
   }
-  // tan → snow
+  // snow peaks
   const u = (t - 0.85) / 0.15;
-  return `rgb(${Math.round(lerp(175, 245, u))}, ${Math.round(lerp(130, 245, u))}, ${Math.round(lerp(90, 250, u))})`;
+  return `rgb(${Math.round(lerp(195, 250, u))}, ${Math.round(lerp(195, 250, u))}, ${Math.round(lerp(200, 252, u))})`;
 }
 
 /** A simpler 2-tone land/water palette closer to a satellite map. */

@@ -78,4 +78,7 @@ export interface RenderOptions {
   readonly showCurrentArrows?: boolean;
   /** Sample one arrow every N ocean cells. Default 16. */
   readonly currentArrowEveryN?: number;
+  /** Draw graticule overlay (equator, tropics, polar circles, meridians, N/S
+   *  pole labels). Works in both projections. Default off. */
+  readonly showGraticule?: boolean;
 }

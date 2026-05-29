@@ -188,6 +188,9 @@ export function render(
   if (options.showCurrentArrows) {
     drawCurrentArrows(ctx, source, options, project);
   }
+  if (options.showGraticule) {
+    drawGraticule(ctx, project);
+  }
 }
 
 function drawCells(
@@ -423,4 +426,88 @@ function drawCurrentArrows(
     ctx.lineTo(p2.x + ax2, p2.y + ay2);
     ctx.stroke();
   }
+}
+
+/** Overlay pass: draw a navigation graticule — equator, tropics, polar circles,
+ *  meridians every 30°, and N/S pole markers. Works in both projections. The
+ *  equator is the heaviest line so the eye can find it immediately; tropics and
+ *  polar circles are dashed/lighter for context. */
+function drawGraticule(
+  ctx: CanvasRenderingContext2D,
+  project: ProjectFn,
+): void {
+  const steps = 144;
+
+  // Meridians first so the equator overlays them at the crossing.
+  ctx.setLineDash([3, 6]);
+  ctx.strokeStyle = 'rgba(220, 220, 220, 0.28)';
+  ctx.lineWidth = 1;
+  for (let lon = 0; lon < 360; lon += 30) {
+    strokeMeridian(ctx, lon, steps, project);
+  }
+
+  // Polar circles and tropics — dashed, paler.
+  ctx.setLineDash([4, 6]);
+  ctx.strokeStyle = 'rgba(180, 220, 240, 0.5)';
+  ctx.lineWidth = 1;
+  strokeParallel(ctx, 66.5, steps, project);
+  strokeParallel(ctx, -66.5, steps, project);
+
+  ctx.strokeStyle = 'rgba(240, 210, 130, 0.5)';
+  strokeParallel(ctx, 23.5, steps, project);
+  strokeParallel(ctx, -23.5, steps, project);
+
+  // Equator — solid, brightest.
+  ctx.setLineDash([]);
+  ctx.strokeStyle = 'rgba(245, 200, 70, 0.85)';
+  ctx.lineWidth = 1.6;
+  strokeParallel(ctx, 0, steps, project);
+
+  // Pole labels: small N/S markers right at lat=±90 so the orientation is
+  // unambiguous even without a basemap.
+  ctx.setLineDash([]);
+  ctx.font = 'bold 11px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = 'rgba(245, 245, 250, 0.92)';
+  const pN = project({ lat: 90, lon: 0 });
+  if (pN.visible) ctx.fillText('N', pN.x, pN.y);
+  const pS = project({ lat: -90, lon: 0 });
+  if (pS.visible) ctx.fillText('S', pS.x, pS.y);
+}
+
+function strokeParallel(
+  ctx: CanvasRenderingContext2D,
+  lat: number,
+  steps: number,
+  project: ProjectFn,
+): void {
+  ctx.beginPath();
+  let inPath = false;
+  for (let i = 0; i <= steps; i++) {
+    const lon = (i / steps) * 360;
+    const p = project({ lat, lon });
+    if (!p.visible) { inPath = false; continue; }
+    if (!inPath) { ctx.moveTo(p.x, p.y); inPath = true; }
+    else { ctx.lineTo(p.x, p.y); }
+  }
+  ctx.stroke();
+}
+
+function strokeMeridian(
+  ctx: CanvasRenderingContext2D,
+  lon: number,
+  steps: number,
+  project: ProjectFn,
+): void {
+  ctx.beginPath();
+  let inPath = false;
+  for (let i = 0; i <= steps; i++) {
+    const lat = -90 + (i / steps) * 180;
+    const p = project({ lat, lon });
+    if (!p.visible) { inPath = false; continue; }
+    if (!inPath) { ctx.moveTo(p.x, p.y); inPath = true; }
+    else { ctx.lineTo(p.x, p.y); }
+  }
+  ctx.stroke();
 }

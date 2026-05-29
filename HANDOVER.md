@@ -2,7 +2,7 @@
 
 **Purpose of this file:** a re-entry point when a session is cut short. Read top-to-bottom in two minutes and you should know where the project is, what has been decided, and what the next decision is.
 
-**Last updated:** 2026-05-29 (BP 5 prep — gzip + CORS landed; v0.1.0 tagged)
+**Last updated:** 2026-05-29 (Bundle A renderer polish landed: hypsometric elevation palette, graticule overlay, high-N artifact documented; currents UI hidden pending physics revision; default N raised 512→5000)
 
 ---
 
@@ -87,11 +87,21 @@ Likely places for the next decisions: the **MeridianWorlds boundary module** (fi
 
 ## 8. Next concrete actions
 
-`plans/plan1.md` is fully landed. BP 5 closed with decisions 40–43: HTTP-layer gzip, deferred persistence, open CORS, tag `v0.1.0`. Tag cut at the BP 5 commit. Open work, in roughly the order it'll likely appear:
+`plans/plan1.md` is fully landed; `v0.1.0` tagged. **Post-v0.1.0 priority sequence agreed 2026-05-29** after user reviewed the running studio:
 
-1. **MeridianWorlds boundary module against the contract.** First downstream pin. Whatever shape redirects come back from this is the gate for `v1.0.0`.
-2. **Disk persistence (`--worlds-dir`) in `apps/service`** when a use case actually requires durable storage (decision 38/41).
-3. **Annotations side of the contract** (consumer-owned borders, settlements, names against `worldId`s) — currently only sketched in `reports/client-server-architecture.md`.
+1. **Bundle A — Renderer polish (landed 2026-05-29).** All three items complete.
+   - **R1 ✓:** Hypsometric elevation palette in `packages/world-renderer/src/palette.ts`. Mountain ranges read as a cool-gray rock band (e ∈ [0.65, 0.85]) against warmer tan/green land, with a pale-sand strip at sea level and snow peaks above 0.85.
+   - **R2 ✓:** Graticule overlay (equator solid yellow, tropics dashed gold, polar circles dashed light-blue, meridians every 30° gray, N/S pole labels). Panel toggle `graticule` defaults ON. Works in both projections. Implemented in `canvas.ts` (`drawGraticule` + `strokeParallel` + `strokeMeridian`).
+   - **R3 ✓:** Diagnosed and documented (no code fix). White spirals at very high N are sub-pixel Canvas2D AA + Fibonacci point draw-order; not a generation bug. Existing N>100k warning now mentions the rendering artifact. See `project_high_n_spiral_artifact` auto-memory for the mechanism and the cheap mitigation path (adaptive dots-on-overflow in canvas.ts) if it becomes a complaint.
+   - **Side change:** `currents` mode and `current arrows` overlay removed from the studio UI pending physics revision (user judged Ekman-deflected wind model from decision 26 too rough to publish). Engine still computes currents and serializes them in the contract — re-enabling is a UI-only edit. See `project_currents_hidden_until_physics_fix` auto-memory.
+   - **Side change:** Default `numRegions` raised 512 → 5000 in `apps/studio/src/main.ts` (5000 = minimum useful detail at typical viewport size).
+2. **Disk persistence (`--worlds-dir`) in `apps/service`** (decisions 38/41). Reuse the existing studio zip layout — service routes already serve those paths.
+3. **Snyder ISEA projection + flat-map JPEG export at configurable resolution.** Renderer-only, **standalone deliverable** — not gated on MeridianWorlds merge (see ship-gate auto-memory). Connects to decisions 5, 10, 11, 16.
+4. **Annotations side of the contract** — consumer-owned borders (`EdgeId[]` per decision 9), settlements, names against `worldId`s. Contract-touching; gated on MeridianWorlds merge for `v1.0.0` semantics but design can begin earlier.
+5. **MeridianWorlds boundary module** — the actual contract pin that triggers `v1.0.0`. May force redirects on (4).
+
+**Deferred:**
+- **R4** (equirectangular polygon-splitting fix from decision 18). Recommended drop: ISEA is becoming the preferred flat projection, and equirect can stay as the ugly fallback. Revisit only if a use case for equirect specifically resurfaces.
 
 ## 6. Where things live
 

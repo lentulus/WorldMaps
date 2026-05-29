@@ -10,7 +10,7 @@ import { buildPanel, syncPanelFromState, type UiState } from './panel.js';
 import { saveWorldToFile, loadWorldFromFile, triggerDownload } from './persistence.js';
 
 const ui: UiState = {
-  numRegions: 512,
+  numRegions: 5000,
   seed: 'hello-world',
   numPlates: 12,
   oceanFraction: 0.6,
@@ -20,7 +20,7 @@ const ui: UiState = {
   cameraLon: 0,
   background: '#0a0a0a',
   dotRadius: 2,
-  showCurrentArrows: false,
+  showGraticule: true,
 };
 
 const canvas = document.getElementById('canvas') as HTMLCanvasElement;
@@ -101,7 +101,7 @@ function redraw(): void {
     dotRadius: ui.dotRadius,
     cameraLat: ui.cameraLat,
     cameraLon: ui.cameraLon,
-    showCurrentArrows: ui.showCurrentArrows,
+    showGraticule: ui.showGraticule,
   });
 }
 
