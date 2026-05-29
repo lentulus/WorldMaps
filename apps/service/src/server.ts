@@ -12,9 +12,17 @@
 // immutable, so a consumer may cache them forever.
 
 import { createServer as createHttpServer, type IncomingMessage, type ServerResponse, type Server } from 'node:http';
+import { gzipSync } from 'node:zlib';
 import { runGenerate, serializeWorld } from '@worldmaps/world-engine';
 import type { ResourceRef } from '@worldmaps/world-contract';
 import { WorldStore } from './store.js';
+
+const CORS_HEADERS: Record<string, string> = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Max-Age': '86400',
+};
 
 export interface ServiceOptions {
   /** Override the store. Tests inject one; production lets the server create
@@ -33,7 +41,7 @@ export function createService(options: ServiceOptions = {}): Service {
   const store = options.store ?? new WorldStore();
   const server = createHttpServer((req, res) => {
     handle(req, res, store).catch((err) => {
-      sendJson(res, 500, { error: (err as Error).message ?? 'internal error' });
+      sendJson(res, 500, { error: (err as Error).message ?? 'internal error' }, req);
     });
   });
 
@@ -67,6 +75,12 @@ async function handle(req: IncomingMessage, res: ServerResponse, store: WorldSto
   const url = new URL(req.url ?? '/', 'http://localhost');
   const path = url.pathname;
 
+  if (method === 'OPTIONS') {
+    res.writeHead(204, CORS_HEADERS);
+    res.end();
+    return;
+  }
+
   if (method === 'POST' && path === '/worlds') {
     return handlePostWorlds(req, res, store);
   }
@@ -78,37 +92,37 @@ async function handle(req: IncomingMessage, res: ServerResponse, store: WorldSto
       const sub = m[2]!;
       const world = store.get(worldId);
       if (!world) {
-        sendJson(res, 404, { error: `unknown worldId: ${worldId}` });
+        sendJson(res, 404, { error: `unknown worldId: ${worldId}` }, req);
         return;
       }
       if (sub === 'manifest') {
-        sendJson(res, 200, world.manifest);
+        sendJson(res, 200, world.manifest, req);
         return;
       }
       if (sub.startsWith('layers/')) {
         const name = sub.slice('layers/'.length);
         const layer = world.manifest.layers.find((l) => l.name === name);
         if (!layer) {
-          sendJson(res, 404, { error: `unknown layer: ${name}` });
+          sendJson(res, 404, { error: `unknown layer: ${name}` }, req);
           return;
         }
-        sendBlob(res, layer.resource, world.blobs.get(layer.resource.url));
+        sendBlob(res, layer.resource, world.blobs.get(layer.resource.url), req);
         return;
       }
       if (sub.startsWith('topology/')) {
         const piece = sub.slice('topology/'.length);
         const ref = pickTopologyRef(world.manifest.topology, piece);
         if (!ref) {
-          sendJson(res, 404, { error: `unknown topology piece: ${piece}` });
+          sendJson(res, 404, { error: `unknown topology piece: ${piece}` }, req);
           return;
         }
-        sendBlob(res, ref, world.blobs.get(ref.url));
+        sendBlob(res, ref, world.blobs.get(ref.url), req);
         return;
       }
     }
   }
 
-  sendJson(res, 404, { error: `no route for ${method} ${path}` });
+  sendJson(res, 404, { error: `no route for ${method} ${path}` }, req);
 }
 
 async function handlePostWorlds(
@@ -118,16 +132,16 @@ async function handlePostWorlds(
 ): Promise<void> {
   const body = await readJsonBody(req);
   if (typeof body !== 'object' || body === null) {
-    sendJson(res, 400, { error: 'body must be a JSON object' });
+    sendJson(res, 400, { error: 'body must be a JSON object' }, req);
     return;
   }
   const { seed, params } = body as { seed?: unknown; params?: unknown };
   if (typeof seed !== 'string') {
-    sendJson(res, 400, { error: '`seed` must be a string' });
+    sendJson(res, 400, { error: '`seed` must be a string' }, req);
     return;
   }
   if (typeof params !== 'object' || params === null) {
-    sendJson(res, 400, { error: '`params` must be an object' });
+    sendJson(res, 400, { error: '`params` must be an object' }, req);
     return;
   }
 
@@ -138,7 +152,7 @@ async function handlePostWorlds(
   sendJson(res, 201, {
     worldId,
     manifestUrl: `/worlds/${encodeURIComponent(worldId)}/manifest`,
-  });
+  }, req);
 }
 
 function pickTopologyRef(
@@ -153,27 +167,54 @@ function pickTopologyRef(
   }
 }
 
-function sendJson(res: ServerResponse, status: number, body: unknown): void {
+function sendJson(res: ServerResponse, status: number, body: unknown, req: IncomingMessage): void {
   const json = Buffer.from(JSON.stringify(body), 'utf-8');
-  res.writeHead(status, {
+  sendBody(res, status, json, {
     'Content-Type': 'application/json; charset=utf-8',
-    'Content-Length': json.byteLength,
-  });
-  res.end(json);
+  }, req);
 }
 
-function sendBlob(res: ServerResponse, ref: ResourceRef, bytes: Uint8Array | undefined): void {
+function sendBlob(
+  res: ServerResponse,
+  ref: ResourceRef,
+  bytes: Uint8Array | undefined,
+  req: IncomingMessage,
+): void {
   if (!bytes) {
-    sendJson(res, 500, { error: `blob missing for ${ref.url}` });
+    sendJson(res, 500, { error: `blob missing for ${ref.url}` }, req);
     return;
   }
-  res.writeHead(200, {
+  sendBody(res, 200, Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength), {
     'Content-Type': 'application/octet-stream',
-    'Content-Length': bytes.byteLength,
     'ETag': `"${ref.sha256}"`,
     'Cache-Control': 'public, max-age=31536000, immutable',
-  });
-  res.end(Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength));
+  }, req);
+}
+
+function sendBody(
+  res: ServerResponse,
+  status: number,
+  payload: Buffer,
+  headers: Record<string, string>,
+  req: IncomingMessage,
+): void {
+  const merged: Record<string, string | number> = { ...headers, ...CORS_HEADERS };
+  let body = payload;
+  if (acceptsGzip(req) && payload.byteLength >= 256) {
+    body = gzipSync(payload);
+    merged['Content-Encoding'] = 'gzip';
+    merged['Vary'] = 'Accept-Encoding';
+  }
+  merged['Content-Length'] = body.byteLength;
+  res.writeHead(status, merged);
+  res.end(body);
+}
+
+function acceptsGzip(req: IncomingMessage): boolean {
+  const h = req.headers['accept-encoding'];
+  const value = Array.isArray(h) ? h.join(',') : h;
+  if (!value) return false;
+  return value.split(',').some((part) => part.trim().toLowerCase().startsWith('gzip'));
 }
 
 async function readJsonBody(req: IncomingMessage): Promise<unknown> {

@@ -145,4 +145,59 @@ describe('Phase 9 — HTTP service', () => {
     });
     expect(res.status).toBe(400);
   });
+
+  it('every response carries Access-Control-Allow-Origin: * (decision 42)', async () => {
+    const { worldId } = await postWorld();
+    const paths = [
+      `${baseUrl}/worlds/${encodeURIComponent(worldId)}/manifest`,
+      `${baseUrl}/worlds/${encodeURIComponent(worldId)}/layers/elevation`,
+      `${baseUrl}/worlds/does-not-exist/manifest`,
+    ];
+    for (const p of paths) {
+      const res = await fetch(p);
+      expect(res.headers.get('access-control-allow-origin'), p).toBe('*');
+    }
+  });
+
+  it('OPTIONS preflight returns 204 with full CORS headers', async () => {
+    const res = await fetch(`${baseUrl}/worlds`, {
+      method: 'OPTIONS',
+      headers: {
+        'Origin': 'http://example.com',
+        'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': 'Content-Type',
+      },
+    });
+    expect(res.status).toBe(204);
+    expect(res.headers.get('access-control-allow-origin')).toBe('*');
+    expect(res.headers.get('access-control-allow-methods')).toContain('POST');
+    expect(res.headers.get('access-control-allow-headers')).toContain('Content-Type');
+  });
+
+  it('blobs are gzip-encoded when client sends Accept-Encoding: gzip (decision 40)', async () => {
+    const { worldId } = await postWorld();
+    const path = `${baseUrl}/worlds/${encodeURIComponent(worldId)}/layers/elevation`;
+
+    const gzipRes = await fetch(path, { headers: { 'Accept-Encoding': 'gzip' } });
+    expect(gzipRes.status).toBe(200);
+    // fetch() in Node auto-decompresses, so we can't read the encoding header
+    // off the body — but we can confirm the round-trip byte length matches the
+    // manifest and that the server advertised the negotiation via `Vary`.
+    expect(gzipRes.headers.get('vary')).toMatch(/Accept-Encoding/i);
+
+    const manifest = (await (await fetch(
+      `${baseUrl}/worlds/${encodeURIComponent(worldId)}/manifest`,
+    )).json()) as WorldManifest;
+    const expectedBytes = manifest.layers.find((l) => l.name === 'elevation')!.resource.bytes;
+    const body = new Uint8Array(await gzipRes.arrayBuffer());
+    expect(body.byteLength).toBe(expectedBytes);
+  });
+
+  it('does not gzip small payloads (below the 256-byte threshold)', async () => {
+    const res = await fetch(`${baseUrl}/worlds/no-such-id/manifest`, {
+      headers: { 'Accept-Encoding': 'gzip' },
+    });
+    expect(res.status).toBe(404);
+    expect(res.headers.get('content-encoding')).toBeNull();
+  });
 });

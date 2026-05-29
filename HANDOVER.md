@@ -2,7 +2,7 @@
 
 **Purpose of this file:** a re-entry point when a session is cut short. Read top-to-bottom in two minutes and you should know where the project is, what has been decided, and what the next decision is.
 
-**Last updated:** 2026-05-29 (Phase 9 implemented — HTTP service runnable)
+**Last updated:** 2026-05-29 (BP 5 prep — gzip + CORS landed; v0.1.0 tagged)
 
 ---
 
@@ -16,12 +16,12 @@ The relationship to consumers is the same pattern already in use between [`Merid
 
 - **Phase:** end of plan1.md. Phases 0–9 of [`plans/plan1.md`](plans/plan1.md) are done; **BP 2** (first interface), **BP 3** (terrain visible), and **BP 4** (full sim visible) all reached, redirects absorbed. **BP 5** (pre-merge gate, tagged release) is the next breakpoint.
 - **What works end-to-end:** studio → Web Worker → engine → renderer. Engine produces Fibonacci sphere → Voronoi topology (with cached per-cell area) → tectonic plates (BFS flood) → elevation (plate-motion convergence + hotspots + ocean-fraction quantile shift) → weather (temperature insolation+lapse, banded zonal wind in tangent-frame, **humidity = semi-Lagrangian wind advection + area-weighted diffusion + Dirichlet ocean sources**, clouds humidity+orographic lift) → currents (Ekman-deflected wind in tangent-frame, ocean cells only) → rivers (D8 downhill routing on Voronoi mesh; per-edge `riverflow` + derived per-region `riverPresence`). Renderer supports orthographic (default) and equirectangular projections, modes: `dots`, `cells`, `plates`, `elevation`, `satellite`, `temperature`, `humidity`, `clouds`, `currents`, `rivers` (lines), `climate`. Overlay: `showCurrentArrows` toggle works over any mode. ~100 ms generation at N=2048 in the worker; UI never blocks.
-- **Tests:** 137 passing under `vitest run` (Phase 8 added 6 acceptance tests in [`packages/world-engine/src/serialize.test.ts`](packages/world-engine/src/serialize.test.ts); Phase 9 added 8 in [`apps/service/src/server.test.ts`](apps/service/src/server.test.ts)).
+- **Tests:** 141 passing under `vitest run` (Phase 8 added 6 acceptance tests in [`packages/world-engine/src/serialize.test.ts`](packages/world-engine/src/serialize.test.ts); Phase 9 + BP 5 added 12 in [`apps/service/src/server.test.ts`](apps/service/src/server.test.ts)).
 - **Reference implementation studied:** [`freezedriedmangos/realistic-planet-generation-and-simulation`](https://freezedriedmangos.github.io/realistic-planet-generation-and-simulation/) (p5.js). Local copy: [`/home/lentulus/projects/mapsamples/realistic-planet-generation-and-simulation`](../mapsamples/realistic-planet-generation-and-simulation). Treated as **algorithm reference, not a fork base**.
 - **Implementation language:** **TypeScript** — committed.
 - **Save/load works:** studio Save world button packs the engine's manifest + blobs into a `worldmap-<id>.zip`; Load reads any prior save back and re-renders. The first user of the `LayerDomain = 'edge'` discriminator (`riverflow`) ships in the manifest. Load-determinism guaranteed per decision 12 (acceptance test in serialize.test.ts).
-- **HTTP service runnable:** `npm start --workspace=apps/service` exposes the engine on port 8787. Endpoints match arch §6 exactly (`POST /worlds`, `GET /worlds/:id/manifest`, `GET /worlds/:id/layers/:name`, `GET /worlds/:id/topology/:piece`). All blob responses set `ETag = sha256` and `Cache-Control: immutable`. Storage is in-memory only — no disk persistence in v1.
-- **Next:** **BP 5 — pre-merge gate** (manifest schema final review, blob compression, tagged-release versioning). Everything in `plans/plan1.md` is implemented.
+- **HTTP service runnable:** `npm start --workspace=apps/service` exposes the engine on port 8787. Endpoints match arch §6 exactly (`POST /worlds`, `GET /worlds/:id/manifest`, `GET /worlds/:id/layers/:name`, `GET /worlds/:id/topology/:piece`). All blob responses set `ETag = sha256` and `Cache-Control: immutable`. CORS is open (`Access-Control-Allow-Origin: *`); responses are gzipped when the client sends `Accept-Encoding: gzip`. Storage is in-memory only — no disk persistence in v1.
+- **Next:** **plan1 is closed.** Tag `v0.1.0` cut at this commit. Next concrete work is whatever the first downstream consumer (likely the MeridianWorlds boundary module) needs; until that pins to the contract, schema can still change.
 
 ## 3. What the reports say (one-paragraph each)
 
@@ -74,19 +74,24 @@ The relationship to consumers is the same pattern already in use between [`Merid
 | 37 | **Service uses Node's built-in `http` module — no Express/Fastify.** Surface is small enough (5 routes, regex match) that a dependency would be bigger than the code. Revisit if middleware needs (auth, CORS, rate-limit) accumulate. | Phase 9 implementation 2026-05-29 |
 | 38 | **Service stores worlds in memory only (`Map<worldId, SerializedWorld>`).** Restart loses everything. Disk persistence is deferred — the contract format is identical on-disk, so a future `--worlds-dir` flag is a localized change. Driver: no consumer requires durable storage yet, and Phase 9 was sized for "engine runnable as a service," not "production data store." | Phase 9 implementation 2026-05-29 |
 | 39 | **Blob responses set `Cache-Control: public, max-age=31536000, immutable` alongside `ETag = sha256`.** Arch §6 explicitly allows indefinite caching since blobs are immutable; setting the long max-age makes that the default browser behavior without consumers having to opt in. | Phase 9 implementation 2026-05-29 |
+| 40 | **Blob compression lives at the HTTP layer (`Content-Encoding: gzip`), not in the contract.** Service gzips responses when the client sends `Accept-Encoding: gzip`; raw bytes on disk and in studio zips stay uncompressed. Reason: layer blobs are float arrays with ~20–30% entropy headroom — small win, and contract-level encoding would force a MINOR schema bump. Revisit if a consumer needs smaller on-disk footprint. | BP 5 prep 2026-05-29 |
+| 41 | **Service stays in-memory in v1; disk persistence deferred.** The on-disk layout already exists (studio zip), so a future `--worlds-dir` flag is a localized change. No consumer needs durable storage yet. | BP 5 prep 2026-05-29 (confirms decision 38) |
+| 42 | **Service sends `Access-Control-Allow-Origin: *` on every response.** Lets the studio (or any browser-side tool) call a remote service. Service is currently 127.0.0.1-bound, so the practical impact today is dev-mode. No `Access-Control-Allow-Credentials` — pure read/write of public worlds. | BP 5 prep 2026-05-29 |
+| 43 | **Tag v0.1.0 marks plan1 complete.** Pre-1.0 explicitly preserves the right to break the schema before a downstream consumer pins; v1.0.0 will be cut when the first MeridianWorlds boundary module locks in. Per decision 7 semver, once v1.0.0 ships, breaking changes become MAJOR. | BP 5 prep 2026-05-29 |
 
 ## 5. Open decisions (the next questions to answer)
 
-All architectural / scoping questions are resolved through Phase 8. Anything new should be filed as a fresh entry under §4 (with date) once decided.
+All architectural / scoping questions are resolved through BP 5 (decisions 40–43 close blob compression, persistence, CORS, and release tagging). Anything new should be filed as a fresh entry under §4 (with date) once decided.
 
-Likely places for the next decisions: **BP 5** (after Phase 9, pre-merge gate) — manifest schema final review, blob compression, tagged-release versioning.
+Likely places for the next decisions: the **MeridianWorlds boundary module** (first contract consumer) and any redirects that come back from it — that's what will push the schema toward `v1.0.0`.
 
 ## 8. Next concrete actions
 
-All of `plans/plan1.md` (Phases 0–9) is landed. Up next:
+`plans/plan1.md` is fully landed. BP 5 closed with decisions 40–43: HTTP-layer gzip, deferred persistence, open CORS, tag `v0.1.0`. Tag cut at the BP 5 commit. Open work, in roughly the order it'll likely appear:
 
-1. **BP 5 — pre-merge gate.** Manifest schema final review, blob compression Q (none today; gzip the layer blobs at the contract level or rely on HTTP `Content-Encoding`?), tagged-release versioning. Open it as a fresh planning round when ready.
-2. **Likely follow-ups, no commitment yet:** disk persistence in `apps/service` (decision 38); CORS for cross-origin studio→service calls; first MeridianWorlds boundary module pinned to the contract (the original Phase A consumer of all this work).
+1. **MeridianWorlds boundary module against the contract.** First downstream pin. Whatever shape redirects come back from this is the gate for `v1.0.0`.
+2. **Disk persistence (`--worlds-dir`) in `apps/service`** when a use case actually requires durable storage (decision 38/41).
+3. **Annotations side of the contract** (consumer-owned borders, settlements, names against `worldId`s) — currently only sketched in `reports/client-server-architecture.md`.
 
 ## 6. Where things live
 
