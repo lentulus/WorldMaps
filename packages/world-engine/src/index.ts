@@ -57,3 +57,11 @@ export {
   type ResponseMessage,
   type HandledResponse,
 } from './worker-protocol.js';
+export {
+  serializeWorld,
+  deserializeWorld,
+  sha256Hex,
+  GENERATOR_VERSION,
+  type SerializedWorld,
+  type SerializeOptions,
+} from './serialize.js';

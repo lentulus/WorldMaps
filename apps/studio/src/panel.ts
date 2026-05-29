@@ -22,6 +22,8 @@ export interface UiState {
 export interface PanelCallbacks {
   onRegenerate: () => void;
   onRedraw: () => void;
+  onSave: () => void;
+  onLoad: (file: File) => void;
 }
 
 export function buildPanel(
@@ -88,6 +90,11 @@ export function buildPanel(
       <input id="ui-arrows" type="checkbox" style="flex: none; width: 18px; height: 18px; margin: 0;">
       <span style="flex: 1;"></span>
     </div>
+
+    <div class="panel-section">World file</div>
+    <button class="panel-button" id="ui-save">Save world (.zip)</button>
+    <button class="panel-button" id="ui-load" style="margin-top: 6px; background: #444; border-color: #666;">Load world…</button>
+    <input id="ui-load-file" type="file" accept=".zip,application/zip" style="display: none;">
   `;
 
   const num = root.querySelector<HTMLInputElement>('#ui-num')!;
@@ -102,6 +109,9 @@ export function buildPanel(
   const dot = root.querySelector<HTMLInputElement>('#ui-dot')!;
   const arrows = root.querySelector<HTMLInputElement>('#ui-arrows')!;
   const regen = root.querySelector<HTMLButtonElement>('#ui-regen')!;
+  const save = root.querySelector<HTMLButtonElement>('#ui-save')!;
+  const load = root.querySelector<HTMLButtonElement>('#ui-load')!;
+  const loadFile = root.querySelector<HTMLInputElement>('#ui-load-file')!;
 
   num.value = String(state.numRegions);
   seed.value = state.seed;
@@ -185,4 +195,27 @@ export function buildPanel(
     state.showCurrentArrows = arrows.checked;
     cb.onRedraw();
   });
+
+  save.addEventListener('click', () => cb.onSave());
+  load.addEventListener('click', () => loadFile.click());
+  loadFile.addEventListener('change', () => {
+    const file = loadFile.files?.[0];
+    if (file) cb.onLoad(file);
+    loadFile.value = '';
+  });
+}
+
+export function syncPanelFromState(root: HTMLElement, state: UiState): void {
+  const set = <T extends HTMLInputElement | HTMLSelectElement>(sel: string, value: string): void => {
+    const el = root.querySelector<T>(sel);
+    if (el) el.value = value;
+  };
+  set<HTMLInputElement>('#ui-num', String(state.numRegions));
+  set<HTMLInputElement>('#ui-seed', state.seed);
+  set<HTMLInputElement>('#ui-plates', String(state.numPlates));
+  set<HTMLInputElement>('#ui-ocean', String(Math.round(state.oceanFraction * 100)));
+  set<HTMLSelectElement>('#ui-proj', state.projection);
+  set<HTMLInputElement>('#ui-cam-lat', String(state.cameraLat));
+  set<HTMLInputElement>('#ui-cam-lon', String(state.cameraLon));
+  set<HTMLSelectElement>('#ui-mode', state.mode);
 }

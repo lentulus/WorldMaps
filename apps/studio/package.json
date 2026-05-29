@@ -11,6 +11,7 @@
   "dependencies": {
     "@worldmaps/world-contract": "*",
     "@worldmaps/world-engine": "*",
-    "@worldmaps/world-renderer": "*"
+    "@worldmaps/world-renderer": "*",
+    "fflate": "^0.8.3"
   }
 }

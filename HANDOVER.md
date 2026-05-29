@@ -2,7 +2,7 @@
 
 **Purpose of this file:** a re-entry point when a session is cut short. Read top-to-bottom in two minutes and you should know where the project is, what has been decided, and what the next decision is.
 
-**Last updated:** 2026-05-26 (Phases 0–7 implemented; BP 4 redirects absorbed)
+**Last updated:** 2026-05-29 (Phase 8 implemented — save/load round-trip in studio)
 
 ---
 
@@ -14,12 +14,13 @@ The relationship to consumers is the same pattern already in use between [`Merid
 
 ## 2. Current status
 
-- **Phase:** mid-implementation. Phases 0–7 of [`plans/plan1.md`](plans/plan1.md) are done; **BP 2** (first interface), **BP 3** (terrain visible), and **BP 4** (full sim visible) all reached, redirects absorbed. **Phase 8** (serialization to contract) is the next concrete chunk.
+- **Phase:** mid-implementation. Phases 0–8 of [`plans/plan1.md`](plans/plan1.md) are done; **BP 2** (first interface), **BP 3** (terrain visible), and **BP 4** (full sim visible) all reached, redirects absorbed. **Phase 9** (apps/service HTTP wrapper) is the next concrete chunk.
 - **What works end-to-end:** studio → Web Worker → engine → renderer. Engine produces Fibonacci sphere → Voronoi topology (with cached per-cell area) → tectonic plates (BFS flood) → elevation (plate-motion convergence + hotspots + ocean-fraction quantile shift) → weather (temperature insolation+lapse, banded zonal wind in tangent-frame, **humidity = semi-Lagrangian wind advection + area-weighted diffusion + Dirichlet ocean sources**, clouds humidity+orographic lift) → currents (Ekman-deflected wind in tangent-frame, ocean cells only) → rivers (D8 downhill routing on Voronoi mesh; per-edge `riverflow` + derived per-region `riverPresence`). Renderer supports orthographic (default) and equirectangular projections, modes: `dots`, `cells`, `plates`, `elevation`, `satellite`, `temperature`, `humidity`, `clouds`, `currents`, `rivers` (lines), `climate`. Overlay: `showCurrentArrows` toggle works over any mode. ~100 ms generation at N=2048 in the worker; UI never blocks.
-- **Tests:** 123 passing under `vitest run`. Computer-evaluated tests are favoured over visual inspection; BP 4 added no new tests since the redirects were palette/overlay/UX (verified by screenshot).
+- **Tests:** 129 passing under `vitest run` (Phase 8 added 6 acceptance tests in [`packages/world-engine/src/serialize.test.ts`](packages/world-engine/src/serialize.test.ts)).
 - **Reference implementation studied:** [`freezedriedmangos/realistic-planet-generation-and-simulation`](https://freezedriedmangos.github.io/realistic-planet-generation-and-simulation/) (p5.js). Local copy: [`/home/lentulus/projects/mapsamples/realistic-planet-generation-and-simulation`](../mapsamples/realistic-planet-generation-and-simulation). Treated as **algorithm reference, not a fork base**.
 - **Implementation language:** **TypeScript** — committed.
-- **Next:** **Phase 8 — serialization to contract** (~1.5 days). Engine emits `WorldManifest` + binary blobs against the Phase 1 contract; studio gets save/load; load-determinism test per decision 12. First user of the `LayerDomain = 'edge'` discriminator (`riverflow`). All BP 4 carryovers settled — humidity now ships post-advection; mode set is final; layer set is final (see §4 decisions 29–32).
+- **Save/load works:** studio Save world button packs the engine's manifest + blobs into a `worldmap-<id>.zip`; Load reads any prior save back and re-renders. The first user of the `LayerDomain = 'edge'` discriminator (`riverflow`) ships in the manifest. Load-determinism guaranteed per decision 12 (acceptance test in serialize.test.ts).
+- **Next:** **Phase 9 — apps/service HTTP wrapper** (~1 day). Same serialization code path, two delivery channels (Worker + HTTP). Then BP 5 pre-merge gate.
 
 ## 3. What the reports say (one-paragraph each)
 
@@ -65,20 +66,23 @@ The relationship to consumers is the same pattern already in use between [`Merid
 | 30 | **Rivers render as edge lines, not per-region tint.** The previous per-region `riverPresence` tint (decision in canvas.ts before BP 4) was too muted at default N. Rendering switched to: satellite base + per-edge line stroke with width/alpha scaled by `sqrt(normalized riverflow)`, threshold `nf > 0.01`. Per-region `riverPresence` is still emitted in `WorldState` because the contract advertises it (decision 15) and consumers may prefer the scalar form. | BP 4 redirect 2026-05-26 |
 | 31 | **Current arrows are an independent overlay toggle, not tied to mode.** Studio panel exposes a `current arrows` checkbox; when on, the renderer draws short arrows (subsampled, every 16th ocean cell by default) on top of WHATEVER cell pass is active. Implementation: cell centre + great-circle tip displaced along the current direction in 3D, both projected; works in equirectangular and orthographic. Cell-tint mode `currents` is kept as a magnitude legend; arrows complement it. | BP 4 redirect 2026-05-26 |
 | 32 | **Studio N cap raised from 5,000 → 1,000,000** with a yellow warning past 100,000 that displays an estimated generation time (extrapolated linearly from N=2048 → ~80 ms, so ~40 µs/cell). The cap was an arbitrary UI guard; no engine constraint. Past 100k the single-threaded worker blocks visibly, so the warning makes that trade-off explicit. | BP 4 redirect 2026-05-26 |
+| 33 | **Topology CSR blobs encode `offsets` then `flat` in a single ResourceRef** (one for `neighbors`, one for `cellVertices`). Loader knows `numRegions` from the manifest, so `offsets` length is implicit and `flat` length follows from `offsets[numRegions]`. Reason: the Phase 1 contract types model each topology piece as a single ResourceRef, so splitting CSR into two refs would require a contract revision (cheaper to encode the seam instead). | Phase 8 implementation 2026-05-29 |
+| 34 | **`worldId` is a UUID v4** generated via `crypto.randomUUID()` at serialize time (prefixed `w_`). Two saves of the same in-memory `WorldState` therefore produce distinct `worldId`s, matching decision 12's "worldId assigned at creation, not derived from `(seed, params, version)`". | Phase 8 implementation 2026-05-29 |
+| 35 | **Studio packs saves as a `.zip` via `fflate`** (~10 KB dep, isomorphic Node/browser). Layout inside the archive matches the contract `url`s exactly: `manifest.json` at root, `layers/<name>.bin`, `topology/<piece>.bin`. The HTTP service in Phase 9 will serve the same files unzipped, so consumers see the same paths in either delivery channel. | Phase 8 implementation 2026-05-29 |
+| 36 | **Blob endianness is host-native** (typed-array buffers written/read as-is). Decision 12 promises *load determinism*, not portable byte-identity; revisit if a cross-arch consumer appears. | Phase 8 implementation 2026-05-29 |
 
 ## 5. Open decisions (the next questions to answer)
 
-All architectural / scoping questions are resolved through BP 4. Anything new should be filed as a fresh entry under §4 (with date) once decided.
+All architectural / scoping questions are resolved through Phase 8. Anything new should be filed as a fresh entry under §4 (with date) once decided.
 
 Likely places for the next decisions: **BP 5** (after Phase 9, pre-merge gate) — manifest schema final review, blob compression, tagged-release versioning.
 
 ## 8. Next concrete actions
 
-Phases 0–7 of [`plans/plan1.md`](plans/plan1.md) are landed, BP 4 redirects absorbed. Up next:
+Phases 0–8 of [`plans/plan1.md`](plans/plan1.md) are landed, BP 4 redirects absorbed, save/load round-trip works in the studio. Up next:
 
-1. **Phase 8 — serialization to contract** (~1.5 days). Engine emits manifest + blobs; studio gets save/load. Load-determinism test (decision 12). First user of the edge-domain layer descriptor (`riverflow`). Layer set is final per decisions 29–31: `latlon`, `plate`, `elevation`, `temperature`, `wind`, `humidity` (post-advection), `clouds`, `currents`, `riverflow` (edge), `riverPresence`.
-2. **Phase 9 — apps/service HTTP wrapper** (~1 day).
-3. **BP 5** lands after Phase 9 — pre-merge gate.
+1. **Phase 9 — apps/service HTTP wrapper** (~1 day). Re-uses `serializeWorld` from world-engine; serves `manifest.json` + per-blob URLs, `ETag = sha256` for blobs.
+2. **BP 5** lands after Phase 9 — pre-merge gate (manifest schema final review, blob compression Q, tagged-release versioning).
 
 ## 6. Where things live
 
@@ -103,7 +107,7 @@ Phases 0–7 of [`plans/plan1.md`](plans/plan1.md) are landed, BP 4 redirects ab
 │   │   │   ├── src/{identity,manifest,layer,annotation,resource,ids,codec,validation,schema}.ts
 │   │   │   └── schema/world-manifest.schema.json
 │   │   ├── world-engine/                   ← generator, runs in a Web Worker by default
-│   │   │   └── src/{state,rng,generate,worker,worker-protocol}.ts
+│   │   │   └── src/{state,rng,generate,worker,worker-protocol,serialize}.ts
 │   │   │       + geom/{projections,sphere,voronoi}.ts
 │   │   │       + generate/{plates,elevation}.ts
 │   │   │       + simulate/{diffusion,temperature,wind,humidity,clouds,currents,rivers}.ts
@@ -111,7 +115,7 @@ Phases 0–7 of [`plans/plan1.md`](plans/plan1.md) are landed, BP 4 redirects ab
 │   │       └── src/{canvas,palette,types}.ts
 │   └── apps/
 │       ├── studio/                         ← Vite app: panel + worker + renderer wired
-│       │   └── src/{main,panel,vite-env.d}.ts + index.html + vite.config.ts
+│       │   └── src/{main,panel,persistence,vite-env.d}.ts + index.html + vite.config.ts
 │       └── service/                        ← HTTP wrapper (Phase 9, currently stub)
 ├── mapsamples/
 │   └── realistic-planet-generation-and-simulation/   ← reference impl, do not modify
@@ -127,7 +131,7 @@ Phases 0–7 of [`plans/plan1.md`](plans/plan1.md) are landed, BP 4 redirects ab
 1. Read this file.
 2. Read [`plans/plan1.md`](plans/plan1.md) — that's the spec progress is reported against.
 3. `git log --oneline -20` for what's landed since the last update of this file.
-4. `npm install && npx vitest run` to verify the test suite is still green (currently 123).
+4. `npm install && npx vitest run` to verify the test suite is still green (currently 129).
 5. Run the studio: `cd apps/studio && npx vite` — open `http://127.0.0.1:5173/`. Should see an orthographic globe; the mode dropdown lists climate / satellite / elevation / temperature / humidity / clouds / currents / rivers / plates / cells / dots.
 6. If §5 lists decisions as open, confirm with the user before assuming.
 7. **Update this file at the end of any non-trivial session.** New decisions go in §4 with the date.
