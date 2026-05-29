@@ -14,7 +14,7 @@ export type RenderMode =
   | 'clouds'
   | 'currents'
   | 'rivers';
-export type RenderProjection = 'equirectangular' | 'orthographic';
+export type RenderProjection = 'equirectangular' | 'orthographic' | 'isea';
 
 export interface RenderSource {
   readonly numRegions: number;

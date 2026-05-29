@@ -19,6 +19,13 @@ import {
   climateColor,
   currentColor,
 } from './palette.js';
+import {
+  iseaFaceOf,
+  iseaForward,
+  iseaForwardOnFace,
+  ISEA_NET_WIDTH,
+  ISEA_NET_HEIGHT,
+} from './isea.js';
 import type {
   RenderSource,
   RenderOptions,
@@ -39,7 +46,7 @@ interface Pixel {
 }
 
 interface ProjectFn {
-  (p: LatLon): Pixel;
+  (p: LatLon, faceHint?: number): Pixel;
 }
 
 function makeProjector(
@@ -53,6 +60,23 @@ function makeProjector(
     return (p) => {
       const q = equirectangularForward(p, width, height);
       return { x: q.x, y: q.y, visible: true };
+    };
+  }
+  if (projection === 'isea') {
+    // Letterbox the net into the canvas: edge length picked so the whole
+    // 5.5 × 3·√3/2 net fits, centered.
+    const edgePx = Math.min(width / ISEA_NET_WIDTH, height / ISEA_NET_HEIGHT);
+    const offsetX = (width - ISEA_NET_WIDTH * edgePx) / 2;
+    const offsetY = (height - ISEA_NET_HEIGHT * edgePx) / 2;
+    return (p, faceHint) => {
+      const q = faceHint !== undefined
+        ? iseaForwardOnFace(p.lat, p.lon, faceHint)
+        : iseaForward(p.lat, p.lon);
+      return {
+        x: offsetX + q.x * edgePx,
+        y: offsetY + q.y * edgePx,
+        visible: true,
+      };
     };
   }
   const scale = Math.min(width, height) * 0.48;
@@ -188,7 +212,9 @@ export function render(
   if (options.showCurrentArrows) {
     drawCurrentArrows(ctx, source, options, project);
   }
-  if (options.showGraticule) {
+  // Graticule on isea would have to be broken at face boundaries (parallels
+  // become zigzag chains in the net), which is real work. Skip on isea for v1.
+  if (options.showGraticule && options.projection !== 'isea') {
     drawGraticule(ctx, project);
   }
 }
@@ -201,6 +227,7 @@ function drawCells(
   cellColor: (r: number) => string,
 ): void {
   const { numRegions, cellVertexOffsets, cellVertexFlat, latlon } = source;
+  const isIsea = options.projection === 'isea';
 
   for (let r = 0; r < numRegions; r++) {
     const start = cellVertexOffsets[r]!;
@@ -208,12 +235,18 @@ function drawCells(
     const nVerts = (end - start) / 2;
     if (nVerts < 3) continue;
 
+    const lat = latlon[2 * r]!;
+    const lon = latlon[2 * r + 1]!;
+
     if (options.projection === 'orthographic') {
-      const lat = latlon[2 * r]!;
-      const lon = latlon[2 * r + 1]!;
       const c = project({ lat, lon });
       if (!c.visible) continue;
     }
+
+    // For ISEA, anchor every vertex of the cell to the face the cell center
+    // belongs to. Otherwise a cell straddling a face boundary would project
+    // its vertices to different faces and tear across the net.
+    const faceHint = isIsea ? iseaFaceOf(lat, lon) : undefined;
 
     ctx.fillStyle = cellColor(r);
     ctx.beginPath();
@@ -224,7 +257,7 @@ function drawCells(
       const sx = cellVertexFlat[start + 2 * k]!;
       const sy = cellVertexFlat[start + 2 * k + 1]!;
       const ll = stereographicInverse({ x: sx, y: sy });
-      const p = project(ll);
+      const p = project(ll, faceHint);
       if (!p.visible) {
         anyHidden = true;
         break;

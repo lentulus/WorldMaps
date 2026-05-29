@@ -61,6 +61,7 @@ export function buildPanel(
       <select id="ui-proj">
         <option value="orthographic">orthographic (globe)</option>
         <option value="equirectangular">equirectangular</option>
+        <option value="isea">isea (flat icosahedron)</option>
       </select>
     </div>
     <div class="panel-row"><label>camera lat</label><input id="ui-cam-lat" type="range" min="-90" max="90" step="1"></div>
