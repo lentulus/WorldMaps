@@ -28,6 +28,10 @@ export interface ServiceOptions {
   /** Override the store. Tests inject one; production lets the server create
    *  its own. */
   readonly store?: WorldStore;
+  /** Optional on-disk directory for world persistence. When set, the server
+   *  creates a store backed by `<worldsDir>/<worldId>/` directories and
+   *  loads any pre-existing worlds before listening (decision 38/41). */
+  readonly worldsDir?: string;
 }
 
 export interface Service {
@@ -38,7 +42,9 @@ export interface Service {
 }
 
 export function createService(options: ServiceOptions = {}): Service {
-  const store = options.store ?? new WorldStore();
+  const store = options.store ?? new WorldStore(
+    options.worldsDir ? { worldsDir: options.worldsDir } : {},
+  );
   const server = createHttpServer((req, res) => {
     handle(req, res, store).catch((err) => {
       sendJson(res, 500, { error: (err as Error).message ?? 'internal error' }, req);
@@ -48,7 +54,8 @@ export function createService(options: ServiceOptions = {}): Service {
   return {
     server,
     store,
-    listen(port) {
+    async listen(port) {
+      await store.init();
       return new Promise((resolve, reject) => {
         server.once('error', reject);
         server.listen(port, '127.0.0.1', () => {
@@ -147,7 +154,7 @@ async function handlePostWorlds(
 
   const state = runGenerate({ seed, params: params as Parameters<typeof runGenerate>[0]['params'] });
   const world = await serializeWorld(state, params as Parameters<typeof serializeWorld>[1]);
-  store.put(world);
+  await store.put(world);
   const worldId = world.manifest.identity.worldId;
   sendJson(res, 201, {
     worldId,

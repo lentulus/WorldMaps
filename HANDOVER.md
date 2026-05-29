@@ -2,7 +2,7 @@
 
 **Purpose of this file:** a re-entry point when a session is cut short. Read top-to-bottom in two minutes and you should know where the project is, what has been decided, and what the next decision is.
 
-**Last updated:** 2026-05-29 (Bundle A renderer polish landed: hypsometric elevation palette, graticule overlay, high-N artifact documented; currents UI hidden pending physics revision; default N raised 512→5000)
+**Last updated:** 2026-05-29 (Bundle A renderer polish + disk persistence landed; next: ISEA projection + JPEG export)
 
 ---
 
@@ -95,7 +95,7 @@ Likely places for the next decisions: the **MeridianWorlds boundary module** (fi
    - **R3 ✓:** Diagnosed and documented (no code fix). White spirals at very high N are sub-pixel Canvas2D AA + Fibonacci point draw-order; not a generation bug. Existing N>100k warning now mentions the rendering artifact. See `project_high_n_spiral_artifact` auto-memory for the mechanism and the cheap mitigation path (adaptive dots-on-overflow in canvas.ts) if it becomes a complaint.
    - **Side change:** `currents` mode and `current arrows` overlay removed from the studio UI pending physics revision (user judged Ekman-deflected wind model from decision 26 too rough to publish). Engine still computes currents and serializes them in the contract — re-enabling is a UI-only edit. See `project_currents_hidden_until_physics_fix` auto-memory.
    - **Side change:** Default `numRegions` raised 512 → 5000 in `apps/studio/src/main.ts` (5000 = minimum useful detail at typical viewport size).
-2. **Disk persistence (`--worlds-dir`) in `apps/service`** (decisions 38/41). Reuse the existing studio zip layout — service routes already serve those paths.
+2. **Disk persistence (`--worlds-dir`) in `apps/service` ✓ (landed 2026-05-29).** New `apps/service/src/disk.ts` writes each stored world to `<worldsDir>/<worldId>/{manifest.json,layers/<name>.bin,topology/<piece>.bin}` — the **exact** layout the studio zip uses (decision 35), so a user can unzip a `worldmap-*.zip` straight into `<worldsDir>/<worldId>/` and the service picks it up. `WorldStore` gains a `worldsDir` option + async `init()` that eager-loads any pre-existing worlds at startup. `createService({ worldsDir })` wires it through; CLI parses `--worlds-dir <path>` (or `WORLDS_DIR` env). Test coverage in `server.test.ts` exercises full write+restart+reload round-trip. **Important:** worlds are loaded into memory at startup — fine for v1 (<100 worlds), would need lazy load on miss if scale grows. Tag decisions 38/41 satisfied.
 3. **Snyder ISEA projection + flat-map JPEG export at configurable resolution.** Renderer-only, **standalone deliverable** — not gated on MeridianWorlds merge (see ship-gate auto-memory). Connects to decisions 5, 10, 11, 16.
 4. **Annotations side of the contract** — consumer-owned borders (`EdgeId[]` per decision 9), settlements, names against `worldId`s. Contract-touching; gated on MeridianWorlds merge for `v1.0.0` semantics but design can begin earlier.
 5. **MeridianWorlds boundary module** — the actual contract pin that triggers `v1.0.0`. May force redirects on (4).

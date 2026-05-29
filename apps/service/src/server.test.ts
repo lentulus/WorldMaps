@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createService, type Service } from './server.js';
 import { deserializeWorld } from '@worldmaps/world-engine';
 import { validateManifest, type WorldManifest } from '@worldmaps/world-contract';
@@ -199,5 +202,62 @@ describe('Phase 9 — HTTP service', () => {
     });
     expect(res.status).toBe(404);
     expect(res.headers.get('content-encoding')).toBeNull();
+  });
+});
+
+describe('disk persistence (--worlds-dir)', () => {
+  let dir: string;
+
+  beforeAll(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'worldmaps-svc-'));
+  });
+
+  afterAll(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  async function postAgainst(svc: Service, seed: string): Promise<string> {
+    const { baseUrl } = await svc.listen(0);
+    const res = await fetch(`${baseUrl}/worlds`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ seed, params: PARAMS }),
+    });
+    expect(res.status).toBe(201);
+    return ((await res.json()) as { worldId: string }).worldId;
+  }
+
+  it('writes the on-disk layout matching the studio zip and reloads on restart', async () => {
+    const svc1 = createService({ worldsDir: dir });
+    const worldId = await postAgainst(svc1, 'persistence-seed');
+    await svc1.close();
+
+    const manifestPath = join(dir, worldId, 'manifest.json');
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf-8')) as WorldManifest;
+    expect(manifest.identity.worldId).toBe(worldId);
+    for (const layer of manifest.layers) {
+      const bytes = await readFile(join(dir, worldId, layer.resource.url));
+      expect(bytes.byteLength).toBe(layer.resource.bytes);
+    }
+    for (const ref of [
+      manifest.topology.neighbors,
+      manifest.topology.cellVertices,
+      manifest.topology.edges,
+    ]) {
+      const bytes = await readFile(join(dir, worldId, ref.url));
+      expect(bytes.byteLength).toBe(ref.bytes);
+    }
+
+    const svc2 = createService({ worldsDir: dir });
+    const { baseUrl: baseUrl2 } = await svc2.listen(0);
+    try {
+      const res = await fetch(`${baseUrl2}/worlds/${encodeURIComponent(worldId)}/manifest`);
+      expect(res.status).toBe(200);
+      const reloaded = (await res.json()) as WorldManifest;
+      expect(reloaded.identity.worldId).toBe(worldId);
+      expect(reloaded.topology.neighbors.sha256).toBe(manifest.topology.neighbors.sha256);
+    } finally {
+      await svc2.close();
+    }
   });
 });
